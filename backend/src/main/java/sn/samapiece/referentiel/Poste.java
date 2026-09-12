@@ -56,10 +56,10 @@ public class Poste {
     @Column(name = "longitude")
     private Double longitude;
 
-    @Column(name = "cree_le", nullable = false, updatable = false)
+    @Column(name = "cree_le", nullable = false, insertable = false, updatable = false)
     private OffsetDateTime creeLe;
 
-    @Column(name = "maj_le", nullable = false)
+    @Column(name = "maj_le", nullable = false, insertable = false)
     private OffsetDateTime majLe;
 
     protected Poste() {
