@@ -3,14 +3,6 @@ spring:
     name: samapiece-backend
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:dev}
-  # TODO(#<ticket-suivant-JPA-Flyway>) : retirer cette exclusion dès qu'une entité JPA
-  # et une migration Flyway réelles sont introduites. Sans elle, "mvn -pl backend
-  # spring-boot:run" échoue au démarrage faute de datasource configurée, car aucune
-  # base de données n'est requise pour ce ticket de scaffolding.
-  # ATTENTION : tant que cette exclusion est active, /actuator/health répond UP même
-  # si une base réelle configurée par ailleurs serait inaccessible (health check trompeur).
-  autoconfigure:
-    exclude: org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration,org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration
 
 server:
   port: ${SERVER_PORT:8080}
