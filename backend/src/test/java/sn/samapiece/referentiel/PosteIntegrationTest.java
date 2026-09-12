@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -34,6 +35,8 @@ class PosteIntegrationTest {
 
     private static final String HORAIRES = "{\"lundi\":{\"ouvert\":true,\"debut\":\"08:00\",\"fin\":\"18:00\"}}";
 
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+
     @Autowired
     private MockMvc mockMvc;
 
@@ -53,7 +56,7 @@ class PosteIntegrationTest {
     }
 
     @Test
-    void persisterEtRelirePoste_shouldChargerRegionAssociee() {
+    void persisterEtRelirePoste_shouldChargerRegionAssociee() throws Exception {
         Region region = regionRepository.save(new Region("Dakar"));
         Poste poste = posteRepository.save(new Poste(
                 region,
@@ -74,7 +77,7 @@ class PosteIntegrationTest {
         assertThat(relu.getType()).isEqualTo(TypePoste.POLICE);
         assertThat(relu.getAdresse()).isEqualTo("Place de l'Indépendance, Dakar");
         assertThat(relu.getTelephone()).isEqualTo("+221338210000");
-        assertThat(relu.getHoraires()).isEqualTo(HORAIRES);
+        assertThat(OBJECT_MAPPER.readTree(relu.getHoraires())).isEqualTo(OBJECT_MAPPER.readTree(HORAIRES));
         assertThat(relu.getLatitude()).isEqualTo(14.6928);
         assertThat(relu.getLongitude()).isEqualTo(-17.4467);
         assertThat(relu.getRegion().getId()).isEqualTo(region.getId());
