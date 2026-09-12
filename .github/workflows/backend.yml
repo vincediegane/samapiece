@@ -1,0 +1,32 @@
+name: backend
+
+on:
+  push:
+    branches:
+      - '**'
+    paths:
+      - 'backend/**'
+      - 'pom.xml'
+      - '.github/workflows/backend.yml'
+  pull_request:
+    paths:
+      - 'backend/**'
+      - 'pom.xml'
+      - '.github/workflows/backend.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Build and test backend
+        run: mvn -pl backend -am verify

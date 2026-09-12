@@ -1,0 +1,44 @@
+name: frontend
+
+on:
+  push:
+    branches:
+      - '**'
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend.yml'
+  pull_request:
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node 20 LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      # NOTE: pas d'étape "test" au sens strict ici — aucun framework de test
+      # frontend (Vitest/Jest) n'est installé à ce stade (décision actée dans
+      # design.md du ticket #2). Une étape `npm test` sera ajoutée par le
+      # premier ticket qui introduit Vitest et de vrais tests de composants.
