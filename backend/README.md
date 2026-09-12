@@ -9,7 +9,18 @@ API Spring Boot du projet SamaPièce.
 
 ## Lancer en local
 
-Depuis la racine du monorepo :
+Le backend nécessite désormais une base PostgreSQL réelle pour démarrer (les migrations
+Flyway sont appliquées automatiquement au démarrage). Démarrer d'abord la base, par exemple
+via Docker Compose depuis la racine du monorepo :
+
+```bash
+docker-compose up postgres
+```
+
+ou toute instance PostgreSQL locale équivalente exposant les mêmes variables
+`DB_HOST`/`DB_PORT`/`DB_NAME`/`DB_USER`/`DB_PASSWORD` attendues par le profil `dev`.
+
+Puis, depuis la racine du monorepo :
 
 ```bash
 mvn -pl backend spring-boot:run
@@ -52,7 +63,9 @@ SPRING_PROFILES_ACTIVE=staging mvn -pl backend spring-boot:run
 
 ## Notes
 
-- `spring-boot-starter-data-jpa` est présent en dépendance mais l'autoconfiguration
-  datasource/JPA est temporairement exclue (voir `application.yml`) tant qu'aucune entité
-  JPA ni migration Flyway réelle n'existe. Cette exclusion sera retirée par le ticket qui
-  introduira la persistance.
+- Le backend nécessite une base PostgreSQL réelle pour démarrer hors tests : les migrations
+  Flyway (`src/main/resources/db/migration`) sont appliquées automatiquement au démarrage
+  contre la base configurée par le profil actif.
+- Les tests, eux, n'ont besoin d'aucune base locale : ils utilisent Testcontainers, qui
+  démarre son propre conteneur PostgreSQL éphémère (image `postgres:16-alpine`) pour chaque
+  exécution.
