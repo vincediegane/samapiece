@@ -45,6 +45,20 @@ Pour arrêter proprement la stack et supprimer les volumes nommés (`postgres_da
 docker-compose down -v
 ```
 
+## Profils Spring (dev/staging/prod)
+
+Le backend supporte trois profils Spring : `dev` (défaut), `staging` et `prod`
+(`backend/src/main/resources/application-{dev,staging,prod}.yml`). Le profil actif est
+piloté par la variable d'environnement `SPRING_PROFILES_ACTIVE` (définie dans `.env`,
+propagée au conteneur `backend` par `docker-compose.yml`) — aucune valeur n'est codée en
+dur dans les fichiers versionnés. Le mot de passe et l'utilisateur de la base
+(`DB_USER`, `DB_PASSWORD`) ne sont jamais définis en clair : ils sont lus depuis
+l'environnement dans les trois profils, sans valeur par défaut en `staging`/`prod`, et
+sans valeur par défaut sensible en `dev` non plus (seuls `DB_HOST`/`DB_PORT`/`DB_NAME` ont
+un défaut non sensible en `dev`). Détail des profils et commande pour en changer :
+voir la section [« Profils disponibles »](./backend/README.md#profils-disponibles) de
+`backend/README.md`.
+
 ## Conventions
 
 ### Commits
