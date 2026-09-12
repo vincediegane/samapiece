@@ -18,6 +18,33 @@ Détail complet des choix et de leur justification : §11 de `PROJET-SAMAPIECE.m
 - `backend/` : module Maven Spring Boot (voir [`backend/README.md`](./backend/README.md) pour lancer/tester localement).
 - `frontend/` : application React/Vite (voir [`frontend/README.md`](./frontend/README.md) pour lancer/tester localement).
 
+## Lancer la stack complète avec Docker Compose
+
+Prérequis : Docker + Docker Compose installés localement.
+
+```bash
+cp .env.example .env
+docker-compose up -d --build
+```
+
+Une fois `docker-compose ps` affiche tous les services en `healthy` (le `frontend` n'a pas de healthcheck, vérifier juste `Up`), les URLs suivantes sont disponibles :
+
+| Service | URL |
+|---|---|
+| Backend (health) | http://localhost:8080/actuator/health |
+| Frontend | http://localhost:8081 |
+| Meilisearch | http://localhost:7700 |
+| MinIO (console) | http://localhost:9001 |
+| RabbitMQ (management) | http://localhost:15672 |
+
+**Important** : `postgres`, `redis`, `meilisearch`, `minio` et `rabbitmq` démarrent avec la stack mais ne sont pas encore réellement utilisés par le backend à ce stade (cf. ticket #1) — leur présence ne garantit pas une intégration fonctionnelle. Le backend expose `/actuator/health` en `UP` sans jamais ouvrir de connexion JDBC vers `postgres`.
+
+Pour arrêter proprement la stack et supprimer les volumes nommés (`postgres_data`, `minio_data`, `meili_data`) :
+
+```bash
+docker-compose down -v
+```
+
 ## Conventions
 
 ### Commits
