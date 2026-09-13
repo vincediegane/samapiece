@@ -4,6 +4,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import sn.samapiece.iam.AccesRefuseException;
 import sn.samapiece.iam.AgentIntrouvableException;
 import sn.samapiece.iam.MatriculeDejaUtiliseException;
 import sn.samapiece.iam.PosteIntrouvableException;
@@ -12,6 +13,12 @@ import sn.samapiece.iam.PosteIntrouvableException;
 public class AgentAdminExceptionHandler {
 
     public record ErreurReponse(String code, String message) {}
+
+    @ExceptionHandler(AccesRefuseException.class)
+    public ResponseEntity<ErreurReponse> gererAccesRefuse(AccesRefuseException ex) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(new ErreurReponse("ACCES_REFUSE", "Acces refuse."));
+    }
 
     @ExceptionHandler(AgentIntrouvableException.class)
     public ResponseEntity<ErreurReponse> gererAgentIntrouvable(AgentIntrouvableException ex) {
