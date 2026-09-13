@@ -1,6 +1,7 @@
 package sn.samapiece.enregistrement.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -378,11 +379,13 @@ class PieceIntegrationTest {
     @Test
     void creer_commeAgentDesactiveApresEmissionDuToken_shouldRetourner403AccesRefuse() throws Exception {
         Poste poste = creerPoste();
+        String tokenAdmin = creerEtLoginToken("PN-2024-00516", Role.ADMIN_NATIONAL, poste);
         Agent agent = creerAgentActif(poste, "PN-2024-00515", Role.AGENT);
         String token = login("PN-2024-00515", MOT_DE_PASSE_CLAIR);
 
-        agent.desactiver();
-        agentRepository.save(agent);
+        mockMvc.perform(delete("/api/v1/agents/" + agent.getId())
+                        .header("Authorization", "Bearer " + tokenAdmin))
+                .andExpect(status().isNoContent());
 
         mockMvc.perform(post("/api/v1/pieces")
                         .header("Authorization", "Bearer " + token)
