@@ -26,6 +26,8 @@ services:
       MEILISEARCH_HOST: http://meilisearch:7700
       MEILISEARCH_API_KEY: ${MEILI_MASTER_KEY}
       MEILISEARCH_INDEX_PIECES: ${MEILISEARCH_INDEX_PIECES}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
     depends_on:
       minio:
         condition: service_healthy
