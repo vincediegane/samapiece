@@ -23,6 +23,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.http.MediaType;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -118,6 +119,9 @@ class RecherchePubliqueCaptchaIntegrationTest {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
+    @Autowired
+    private StringRedisTemplate redisTemplate;
+
     private Client clientMeilisearchDeTest;
 
     @BeforeEach
@@ -127,6 +131,11 @@ class RecherchePubliqueCaptchaIntegrationTest {
         agentRepository.deleteAll();
         posteRepository.deleteAll();
         regionRepository.deleteAll();
+        // Le compteur d'echecs Redis pour IP_SIMULEE n'est jamais nettoye par le code de production
+        // (il expire seulement via son TTL glissant) : sans ce reset explicite, les methodes @Test de
+        // cette classe partagent le meme conteneur Redis et donc le meme compteur pour la meme IP
+        // simulee, faisant echouer les tests selon leur ordre d'execution (deja constate en CI).
+        redisTemplate.delete("recherche-publique:echecs:" + IP_SIMULEE);
         clientMeilisearchDeTest = new Client(new Config(
                 "http://" + meilisearch.getHost() + ":" + meilisearch.getMappedPort(7700), MEILI_MASTER_KEY));
     }
