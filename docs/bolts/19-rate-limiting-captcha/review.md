@@ -1,71 +1,67 @@
-# Review — #19 Rate limiting + CAPTCHA sur la recherche publique
+# Review - #19 Rate limiting + CAPTCHA sur la recherche publique (2e passage)
 
-CHANGES_REQUESTED
+APPROVE
+
+## Contexte de ce passage
+
+Ce passage se concentre sur la verification du correctif apporte au Finding 1 bloquant du 1er passage (RecherchePubliqueCaptchaFilter avalait toute exception applicative en aval, pas seulement les pannes Redis). Le commit 30c66cf ne touche que 3 fichiers (RecherchePubliqueCaptchaFilter.java, RecherchePubliqueCaptchaFilterTest.java, spec.md), confirme par git diff 395d850..30c66cf --stat. Le reste du diff main..HEAD est identique a ce qui a deja ete revu au 1er passage.
 
 ## Criteres d'acceptation
 
 | # | Critere | Statut |
 |---|---|---|
-| 1 | Rate limiting par IP (Bucket4j + Redis) sur POST /api/v1/recherche-publique, 429 explicite au-dela du seuil | Couvert - RecherchePubliqueRateLimitFilter + RedisRateLimiterConfig conformes au contrat (statut 429, header Retry-After, corps LIMITE_DEBIT_DEPASSEE), teste par RecherchePubliqueRateLimitingIntegrationTest (non executable dans cet environnement, voir Build/tests) |
-| 2 | CAPTCHA requis apres N echecs consecutifs depuis la meme origine | Couvert pour les cas nominaux (200 trouve=false, 400 CRITERES_INSUFFISANTS), teste par RecherchePubliqueCaptchaIntegrationTest ; mais le filtre porteur de cette logique contient un bug qui masque toute erreur applicative imprevue sur l'endpoint protege - voir Finding 1, bloquant |
-| 3 | Test d'integration declenchant le 429 apres depassement du seuil | Couvert - RecherchePubliqueRateLimitingIntegrationTest.depassementDuSeuil_devraitRenvoyer429AvecCorpsEtRetryAfter correspond au plan de tests de la spec |
+| 1 | Rate limiting par IP (Bucket4j + Redis) sur POST /api/v1/recherche-publique, 429 explicite au-dela du seuil | Couvert -- inchange depuis le 1er passage, RecherchePubliqueRateLimitFilter non modifie par le commit correctif, relu a nouveau (chain.doFilter hors du try/catch fail-open, contrat 429/Retry-After/LIMITE_DEBIT_DEPASSEE conforme) |
+| 2 | CAPTCHA requis apres N echecs consecutifs depuis la meme origine | Couvert -- logique nominale inchangee, et le bug bloquant du 1er passage (masquage des exceptions applicatives) est corrige et teste (voir Verification du correctif ci-dessous) |
+| 3 | Test d'integration declenchant le 429 apres depassement du seuil | Couvert -- RecherchePubliqueRateLimitingIntegrationTest, non modifie par ce commit |
 
-## Findings
+## Verification du correctif du Finding 1 (bloquant au 1er passage)
 
-### 1. [Bloquant] RecherchePubliqueCaptchaFilter avale silencieusement toute exception applicative du controleur, pas seulement les pannes Redis
-
-Fichier: backend/src/main/java/sn/samapiece/recherche/securite/RecherchePubliqueCaptchaFilter.java lignes 74-86 :
+Code actuel (backend/src/main/java/sn/samapiece/recherche/securite/RecherchePubliqueCaptchaFilter.java lignes 74-86) :
 
 ```java
 ContentCachingResponseWrapper wrapper = new ContentCachingResponseWrapper(response);
 try {
     chain.doFilter(request, wrapper);
-    mettreAJourCompteur(ip, wrapper);
-} catch (Exception e) {
-    if (!(e instanceof ServletException || e instanceof IOException)) {
-        LOG.warn("Redis indisponible pour la mise a jour du compteur d'echecs (fail-open)", e);
-    } else {
+    try {
+        mettreAJourCompteur(ip, wrapper);
+    } catch (IOException e) {
         throw e;
+    } catch (Exception e) {
+        LOG.warn("Redis indisponible pour la mise a jour du compteur d'echecs (fail-open)", e);
     }
 } finally {
     wrapper.copyBodyToResponse();
 }
 ```
 
-`chain.doFilter(request, wrapper)` est a l'interieur du try, alors que seul `mettreAJourCompteur(...)` est cense echouer pour cause de panne Redis. Toute exception non-ServletException/non-IOException levee n'importe ou en aval (le DispatcherServlet, le controleur RecherchePubliqueController, un bug applicatif quelconque - NPE, IllegalStateException, etc.) est interceptee ici, loguee a tort comme "Redis indisponible" (WARN au lieu d'ERROR), puis avalee. Le finally recopie ensuite un ContentCachingResponseWrapper dont le statut n'a jamais ete positionne (defaut servlet = 200) et dont le corps est vide, vers la vraie reponse HTTP: le citoyen recoit donc un 200 OK avec un corps vide au lieu du 500 que Spring aurait normalement produit, et l'erreur reelle disparait sans jamais atteindre les logs ERROR ni le monitoring.
+1. chain.doFilter(request, wrapper) (ligne 76) est desormais hors de tout try/catch fail-open -- seul l'appel a mettreAJourCompteur(ip, wrapper) (ligne 78) est enveloppe dans le try/catch destine aux pannes Redis.
+2. Propagation d'une exception applicative : le nouveau test exceptionApplicativeDansLaChaine_neDoitJamaisEtreAvaleeParLeFailOpen (RecherchePubliqueCaptchaFilterTest.java lignes 143-157) fait lever IllegalStateException("bug applicatif sans rapport avec Redis") par le FilterChain et verifie via assertThatThrownBy que l'exception remonte telle quelle hors de doFilterInternal, et que compteurService.enregistrerSucces/enregistrerEchec ne sont jamais appeles. Execute avec succes (voir Build/tests). Je n'ai pas rejoue la reproduction empirique sur l'ancien code car cela aurait necessite d'ecraser temporairement un fichier source, ce que mon role de reviewer m'interdit (tentative bloquee par le systeme de permissions, comportement attendu) ; la lecture croisee du diff 395d850..30c66cf (ancien catch(Exception) qui n'excluait que ServletException/IOException, donc attrapait IllegalStateException) suffit a etablir sans ambiguite que ce test aurait echoue sur l'ancien code et passe sur le nouveau.
 
-Scenario reproduit et verifie empiriquement (test Mockito jetable, execute puis supprime, non livre dans le diff): un FilterChain qui leve `new IllegalStateException("bug applicatif ... rien a voir avec Redis")` produit en sortie `STATUT_FINAL=200` et `CORPS_FINAL=[]` - confirmant que le filtre masque un bug qui n'a strictement rien a voir avec la disponibilite de Redis.
+3. Fail-open Redis sur mettreAJourCompteur(...) toujours fonctionnel et non regresse : test erreurRedisSurMiseAJourDuCompteur_devraitLaisserPasserFailOpenSansAlterLaReponse (nouveau, lignes 130-141) verifie que lorsque enregistrerSucces leve une RuntimeException, la reponse originale (statut 200, corps {"trouve":true}) traverse intacte jusqu'au client -- comportement correct et distinct du cas 2.
+4. wrapper.copyBodyToResponse() dans le finally quand une exception applicative remonte : verifie par decompilation du bytecode de ContentCachingResponseWrapper.copyBodyToResponse(boolean) (spring-web 6.1.13, resolu comme dependance transitive de spring-boot-starter-parent 3.3.13) -- la methode commence par un test equivalent a "if (content.size() > 0) { ... } else return;" (bytecode : FastByteArrayOutputStream.size() puis ifle -> return). Tant qu'aucun octet n'a ete ecrit dans le wrapper avant que l'exception ne soit levee, copyBodyToResponse() est un pur no-op : aucun statut ni corps n'est pousse vers la vraie reponse, qui reste non committee et peut donc etre correctement traitee par le mecanisme d'erreur standard de Spring/du conteneur en amont du filtre. RecherchePubliqueController.rechercher(...) (RecherchePubliqueController.java lignes 20-23) retourne un ResponseEntity classique sans ecriture streaming ; Spring MVC n'ecrit le corps qu'apres le retour reussi du handler, donc dans le cas d'une exception applicative levee pendant le traitement, rien n'a encore ete ecrit dans le wrapper au moment ou le finally s'execute. Le cas serait different avec un handler qui ecrirait de facon incrementale dans la reponse puis leverait une exception (corps partiel deja bufferise dans le wrapper, alors recopie par le finally avant la propagation, ce qui produirait une reponse partiellement ecrite ET une tentative de traitement d'erreur en aval) -- mais ce risque est inherent a tout usage de ContentCachingResponseWrapper autour d'un chain.doFilter, preexiste au ticket, ne concerne aucun endpoint actuel du perimetre (aucun controller de ce module ne fait d'ecriture incrementale), et n'est pas une regression introduite par ce commit correctif. Non bloquant.
 
-Comparer avec RecherchePubliqueRateLimitFilter (RecherchePubliqueRateLimitFilter.java lignes 46-68), qui fait cela correctement: `chain.doFilter(request, response)` est appele en dehors du try/catch, donc une erreur applicative y remonte normalement.
+Conclusion sur le correctif : complet et correct, aucune regression introduite sur le fail-open Redis legitime, la propagation d'exception applicative est desormais celle attendue.
 
-Correctif attendu: ne wrapper que `mettreAJourCompteur(ip, wrapper)` dans le try/catch fail-open, et laisser `chain.doFilter(request, wrapper)` hors de ce try (ou dans un try separe qui rethrow tout, finally garde pour copyBodyToResponse()). Note: ce defaut provient du contrat technique propose tel quel dans spec.md (section RecherchePubliqueCaptchaFilter, lignes 458-471) - la spec elle-meme doit etre corrigee en meme temps que le code, sinon un futur bolt la recopiera telle quelle.
+## Verifications reconduites du 1er passage (aucun changement, pas de nouvelle regression)
 
-Impact: les criteres d'acceptation "chemin heureux" passent malgre tout, mais il s'agit d'un bug de fiabilite/observabilite reel et verifie sur l'endpoint public le plus expose du produit (recherche sans authentification) - a corriger avant merge.
-
-### 2. [Mineur, non bloquant] GET /api/v1/recherche-publique/captcha n'est protege par aucun des deux filtres
-
-`shouldNotFilter` des deux filtres compare l'URI a l'exact "/api/v1/recherche-publique" (RecherchePubliqueRateLimitFilter.java lignes 38-40, RecherchePubliqueCaptchaFilter.java lignes 41-43), donc l'endpoint de generation de defi n'est ni rate-limite ni compte. Conforme a la spec (qui ne l'exige pas) et au perimetre du ticket, mais un attaquant peut appeler cet endpoint a volonte pour preparer des reponses valides avant un brute force sur /recherche-publique. A signaler pour un futur ticket, pas bloquant ici.
-
-## Verifications positives (pas de regression detectee)
-
-- Ordre des filtres dans SecurityConfig: rate-limit -> captcha -> JWT, conforme a la spec (SecurityConfig.java lignes 76-78).
-- Fail-open reel et teste (RecherchePubliqueRateLimitFilter, RecherchePubliqueCaptchaFilterTest.erreurRedisSurCaptchaRequis_devraitLaisserPasserFailOpen) pour les scenarios ou Redis est reellement en panne cote compteur/CAPTCHA/rate-limit eux-memes (le bug du Finding 1 est distinct: il masque aussi des erreurs qui n'ont rien a voir avec Redis).
-- EchecRechercheCounterService ne catch aucune exception Redis en interne - conforme a la spec, verifie par lecture du fichier.
-- Le mecanisme 428 delegue bien au bean HandlerExceptionResolver (RecherchePubliqueCaptchaFilter.java ligne 69), pas d'ecriture JSON manuelle ni de propagation nue - CaptchaRequisException produit bien le 428 via RecherchePubliqueExceptionHandler.
-- Correctif @Lazy (commit d53a7d5) verifie comme suffisant: @Lazy sur la classe @Configuration RedisRateLimiterConfig retarde bien tous ses @Bean (Spring applique le marqueur @Lazy d'une classe @Configuration a l'ensemble de ses methodes @Bean), et le @Lazy supplementaire sur le parametre ProxyManager<String> de SecurityConfig.securityFilterChain est necessaire en plus (sans lui, la resolution de ce parametre pour l'appel de la methode @Bean securityFilterChain forcerait quand meme la creation anticipee de la dependance, lazy-init ou non). RedisRateLimiterConfigLazyStartupTest teste effectivement ce scenario exact (demarrage de contexte avec Redis injoignable ne doit pas echouer, et l'usage reel du ProxyManager echoue bien lui, prouvant que la paresse est reelle).
-- Corps/statuts 429 et 428 exactement conformes au contrat (LIMITE_DEBIT_DEPASSEE + Retry-After ; CAPTCHA_REQUIS + captchaChallengeUrl).
-- Numero de document deja hache en amont (NumeroDocumentHasher, herite de #18, non modifie par ce ticket) - aucune regression sur le paragraphe 10 de PROJET-SAMAPIECE.md ; les nouvelles cles Redis introduites par #19 (compteur d'echecs par IP, defi CAPTCHA) ne stockent aucune donnee personnelle sensible en clair.
-- Aucune migration Flyway ajoutee (ticket n'en necessite pas).
-- docker-compose.yml/application-dev.yml/pom.xml conformes au contrat technique de la spec (service redis deja present sur main avant ce ticket, seules les variables d'env et la dependance manquantes ont ete ajoutees).
-- Tests unitaires nouveaux (EchecRechercheCounterServiceTest, DefiMathematiqueCaptchaVerifierTest, RecherchePubliqueCaptchaFilterTest, RedisRateLimiterConfigLazyStartupTest) executes avec succes, logique correcte (TTL glissant, usage unique du defi, court-circuit sans mise a jour du compteur).
-- Piege piece_sequence/UTF-8 deja rencontre sur ce projet: correctement anticipe dans les deux nouveaux tests d'integration (jdbcTemplate.update("DELETE FROM piece_sequence") en @BeforeEach, getContentAsString(StandardCharsets.UTF_8) partout).
+- Ordre des filtres dans SecurityConfig (rate-limit -> captcha -> JWT) inchange -- fichier non touche par le commit correctif.
+- Contrats 429 (LIMITE_DEBIT_DEPASSEE + Retry-After) et 428/CAPTCHA_REQUIS (via HandlerExceptionResolver + RecherchePubliqueExceptionHandler) inchanges, conformes.
+- @Lazy sur RedisRateLimiterConfig et sur le parametre ProxyManager<String> de SecurityConfig : inchange, toujours verifie par RedisRateLimiterConfigLazyStartupTest (2/2 tests passes).
+- Numero de document deja hache en amont (#18), aucune donnee sensible en clair introduite par les nouvelles cles Redis (compteur d'echecs par IP, defi CAPTCHA) -- conforme au paragraphe 10 de PROJET-SAMAPIECE.md.
+- Aucune migration Flyway dans ce ticket.
+- spec.md mis a jour en coherence avec le code corrige (git show 30c66cf -- docs/bolts/19-rate-limiting-captcha/spec.md), evitant qu'un futur bolt ne recopie le bug depuis le contrat technique.
+- Pas de changement frontend dans ce diff.
 
 ## Build/tests
 
-- `mvn -pl backend -am test -Dtest=EchecRechercheCounterServiceTest,DefiMathematiqueCaptchaVerifierTest,RecherchePubliqueCaptchaFilterTest,RedisRateLimiterConfigLazyStartupTest` -> BUILD SUCCESS, 18/18 tests passes.
-- `mvn -pl backend -am test` (suite complete) -> BUILD FAILURE, mais causee uniquement par une incompatibilite documentee Testcontainers/Docker Desktop sur Windows (Could not find a valid Docker environment / Status 400 sur docker info via npipe), touchant de facon identique et indiscriminee les 14 classes @SpringBootTest avec Testcontainers, aussi bien preexistantes (AgentIntegrationTest, AuthIntegrationTest, PieceIntegrationTest, PosteIntegrationTest, SamaPieceApplicationTests, etc.) que nouvelles (RecherchePubliqueRateLimitingIntegrationTest, RecherchePubliqueCaptchaIntegrationTest). Resultat detaille: Tests run: 103, Failures: 0, Errors: 14 - les 89 tests restants (sans Testcontainers) passent tous, confirmant l'affirmation du codeur et l'absence de regression introduite par ce ticket sur la suite existante. Limitation d'environnement pure, pas un signal sur la qualite du code de ce ticket ; les deux nouveaux fichiers Testcontainers (141 + 304 lignes) ont donc ete relus ligne a ligne a la place d'une execution reelle, et sont conformes au plan de tests de la spec.
-- Pas de changement frontend dans ce diff (git diff main..HEAD --stat -- frontend vide) -> pas de npm run build/npm test necessaires.
+- mvn -pl backend -am test -Dtest=RecherchePubliqueCaptchaFilterTest,EchecRechercheCounterServiceTest,DefiMathematiqueCaptchaVerifierTest,RedisRateLimiterConfigLazyStartupTest -> BUILD SUCCESS.
+  - RecherchePubliqueCaptchaFilterTest : 8/8 (dont les 2 nouveaux tests du correctif)
+  - EchecRechercheCounterServiceTest : 5/5
+  - DefiMathematiqueCaptchaVerifierTest : 5/5
+  - RedisRateLimiterConfigLazyStartupTest : 2/2
+  - Total : 20/20, 0 echec, 0 erreur (les stack traces "RuntimeException: Redis indisponible" visibles dans les logs de sortie sont attendues et volontaires -- elles materialisent les scenarios fail-open testes en WARN, pas des echecs de test).
+- Suite Testcontainers complete non relancee dans ce passage (limitation Docker/Windows deja documentee et inchangee depuis le 1er passage ; aucun fichier de tests d'integration Testcontainers n'a ete modifie par le commit correctif).
 
 ## Conclusion
 
-Implementation globalement fidele a la spec, correctif @Lazy bien verifie et suffisant, bonne couverture de tests unitaires, tests d'integration Testcontainers bien concus (relecture stricte faite faute de Docker fonctionnel dans cet environnement). Le point bloquant est le Finding 1: RecherchePubliqueCaptchaFilter doit restreindre son try/catch fail-open au seul appel mettreAJourCompteur(...), sinon un bug applicatif quelconque sur l'endpoint public de recherche devient un 200 OK vide silencieux au lieu d'un 500 visible - inacceptable sur l'endpoint le plus expose du produit. A corriger (et a repercuter dans spec.md) avant nouvelle revue.
+Le correctif du Finding 1 bloquant est complet, correct et teste : chain.doFilter est hors du try/catch fail-open, une exception applicative remonte desormais normalement (verifie par test et par analyse du bytecode de copyBodyToResponse), le fail-open Redis legitime n'est pas regresse, et la spec a ete corrigee en coherence. Aucune regression detectee sur le reste du perimetre du ticket, qui n'a pas ete retouche par ce commit. APPROVE.
