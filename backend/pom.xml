@@ -79,6 +79,11 @@
       <artifactId>minio</artifactId>
       <version>8.5.17</version>
     </dependency>
+    <dependency>
+      <groupId>com.meilisearch.sdk</groupId>
+      <artifactId>meilisearch-java</artifactId>
+      <version>0.14.4</version>
+    </dependency>
 
     <dependency>
       <groupId>org.springframework.boot</groupId>

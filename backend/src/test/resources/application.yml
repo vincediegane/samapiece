@@ -8,3 +8,7 @@ samapiece:
     bucket-photos: samapiece-photos-test
   photo:
     cle-chiffrement: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+  meilisearch:
+    host: http://localhost:7700
+    api-key: test-master-key
+    index-pieces: pieces-test
