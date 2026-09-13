@@ -145,6 +145,15 @@ public class Agent {
         return verrouilleJusqua != null && verrouilleJusqua.isAfter(OffsetDateTime.now());
     }
 
+    public void desactiver() {
+        this.actif = false;
+    }
+
+    public void modifierInformations(String nom, Poste poste) {
+        this.nom = Objects.requireNonNull(nom, "nom");
+        this.poste = Objects.requireNonNull(poste, "poste");
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) {
