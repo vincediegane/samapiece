@@ -458,12 +458,12 @@ public class RecherchePubliqueCaptchaFilter extends OncePerRequestFilter {
         ContentCachingResponseWrapper wrapper = new ContentCachingResponseWrapper(response);
         try {
             chain.doFilter(request, wrapper);
-            mettreAJourCompteur(ip, wrapper);
-        } catch (Exception e) {
-            if (!(e instanceof ServletException || e instanceof IOException)) {
-                LOG.warn("Redis indisponible pour la mise à jour du compteur d'échecs (fail-open)", e);
-            } else {
+            try {
+                mettreAJourCompteur(ip, wrapper);
+            } catch (IOException e) {
                 throw e;
+            } catch (Exception e) {
+                LOG.warn("Redis indisponible pour la mise à jour du compteur d'échecs (fail-open)", e);
             }
         } finally {
             wrapper.copyBodyToResponse();

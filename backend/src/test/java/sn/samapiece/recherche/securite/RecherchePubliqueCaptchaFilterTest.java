@@ -1,9 +1,11 @@
 package sn.samapiece.recherche.securite;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -123,5 +125,34 @@ class RecherchePubliqueCaptchaFilterTest {
 
         verifyNoInteractions(handlerExceptionResolver);
         verify(compteurService).enregistrerSucces("1.2.3.4");
+    }
+
+    @Test
+    void erreurRedisSurMiseAJourDuCompteur_devraitLaisserPasserFailOpenSansAlterLaReponse() throws Exception {
+        when(compteurService.captchaRequis("1.2.3.4")).thenReturn(false);
+        doThrow(new RuntimeException("Redis indisponible")).when(compteurService).enregistrerSucces("1.2.3.4");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        filtre.doFilterInternal(requete(), response, chainQuiRepond(200, "{\"trouve\":true}"));
+
+        assertThat(response.getStatus()).isEqualTo(200);
+        assertThat(response.getContentAsString()).isEqualTo("{\"trouve\":true}");
+        verifyNoInteractions(handlerExceptionResolver);
+    }
+
+    @Test
+    void exceptionApplicativeDansLaChaine_neDoitJamaisEtreAvaleeParLeFailOpen() {
+        when(compteurService.captchaRequis("1.2.3.4")).thenReturn(false);
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        FilterChain chainQuiEchoue = (req, res) -> {
+            throw new IllegalStateException("bug applicatif sans rapport avec Redis");
+        };
+
+        assertThatThrownBy(() -> filtre.doFilterInternal(requete(), response, chainQuiEchoue))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("bug applicatif sans rapport avec Redis");
+
+        verify(compteurService, never()).enregistrerSucces(any());
+        verify(compteurService, never()).enregistrerEchec(any());
     }
 }
