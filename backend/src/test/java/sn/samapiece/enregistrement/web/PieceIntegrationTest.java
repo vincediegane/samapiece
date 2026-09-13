@@ -16,6 +16,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.testcontainers.containers.PostgreSQLContainer;
@@ -67,9 +68,16 @@ class PieceIntegrationTest {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
     @BeforeEach
     void nettoyer() {
         pieceRepository.deleteAll();
+        // piece_sequence n'est pas exposee par un repository Spring Data (acces exclusif via
+        // PieceNumeroFicheGenerator/JdbcTemplate) mais reference poste par FK : a vider avant
+        // posteRepository.deleteAll(), sinon la suppression du poste echoue.
+        jdbcTemplate.update("DELETE FROM piece_sequence");
         agentRepository.deleteAll();
         posteRepository.deleteAll();
         regionRepository.deleteAll();
