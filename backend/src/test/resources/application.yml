@@ -1,3 +1,10 @@
 samapiece:
   jwt:
     secret: test-secret-uniquement-pour-les-tests-automatises-ne-jamais-reutiliser
+  minio:
+    endpoint: http://localhost:9000
+    access-key: test-access-key
+    secret-key: test-secret-key
+    bucket-photos: samapiece-photos-test
+  photo:
+    cle-chiffrement: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
