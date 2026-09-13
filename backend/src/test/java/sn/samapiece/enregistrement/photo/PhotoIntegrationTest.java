@@ -28,6 +28,7 @@ import org.testcontainers.containers.MinIOContainer;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.utility.DockerImageName;
 import sn.samapiece.enregistrement.Piece;
 import sn.samapiece.enregistrement.PieceRepository;
 import sn.samapiece.enregistrement.TypeDocument;
@@ -51,7 +52,9 @@ class PhotoIntegrationTest {
     static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine");
 
     @Container
-    static MinIOContainer minio = new MinIOContainer("quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z");
+    static MinIOContainer minio = new MinIOContainer(
+            DockerImageName.parse("quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z")
+                    .asCompatibleSubstituteFor("minio/minio"));
 
     @DynamicPropertySource
     static void proprietesMinio(DynamicPropertyRegistry registry) {
