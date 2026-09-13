@@ -8,7 +8,10 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -109,6 +112,30 @@ class AgentAdminIntegrationTest {
 
     private String modifierAgentJson(String nom, UUID posteId) throws Exception {
         return OBJECT_MAPPER.writeValueAsString(new ModifierAgentRequest(nom, posteId));
+    }
+
+    private Region creerRegion(String nom) {
+        return regionRepository.save(new Region(nom));
+    }
+
+    private Poste creerPoste(Region region, String nom) {
+        return posteRepository.save(new Poste(
+                region,
+                nom,
+                TypePoste.POLICE,
+                "Adresse " + nom,
+                "+221338210000",
+                HORAIRES,
+                14.6928,
+                -17.4467));
+    }
+
+    private List<String> matriculesDe(String reponseJson) throws Exception {
+        List<String> matricules = new ArrayList<>();
+        for (JsonNode noeud : OBJECT_MAPPER.readTree(reponseJson)) {
+            matricules.add(noeud.get("matricule").asText());
+        }
+        return matricules;
     }
 
     @Test
@@ -348,5 +375,414 @@ class AgentAdminIntegrationTest {
         mockMvc.perform(get("/api/v1/inexistant-protege")
                         .header("Authorization", "Bearer " + accessTokenAgentDesactive))
                 .andExpect(result -> assertThat(result.getResponse().getStatus()).isNotEqualTo(401));
+    }
+
+    @Test
+    void lister_commeChefPoste_shouldRetournerAgentsDeSonPosteUniquement() throws Exception {
+        Region region = creerRegion("Dakar");
+        Poste poste1 = creerPoste(region, "Poste 1");
+        Poste poste2 = creerPoste(region, "Poste 2");
+        String tokenChef = creerEtLoginToken("PN-2024-00400", Role.CHEF_POSTE, poste1);
+        creerAgentActif(poste1, "PN-2024-00401", Role.AGENT);
+        creerAgentActif(poste2, "PN-2024-00402", Role.AGENT);
+
+        String reponse = mockMvc.perform(get("/api/v1/agents")
+                        .header("Authorization", "Bearer " + tokenChef))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        assertThat(matriculesDe(reponse)).containsExactlyInAnyOrder("PN-2024-00400", "PN-2024-00401");
+    }
+
+    @Test
+    void lister_commeAdminRegional_shouldRetournerAgentsDeSaRegionUniquement() throws Exception {
+        Region regionA = creerRegion("Region A");
+        Region regionB = creerRegion("Region B");
+        Poste posteA = creerPoste(regionA, "Poste A");
+        Poste posteB = creerPoste(regionB, "Poste B");
+        String tokenAdminRegional = creerEtLoginToken("PN-2024-00403", Role.ADMIN_REGIONAL, posteA);
+        creerAgentActif(posteA, "PN-2024-00404", Role.AGENT);
+        creerAgentActif(posteB, "PN-2024-00405", Role.AGENT);
+
+        String reponse = mockMvc.perform(get("/api/v1/agents")
+                        .header("Authorization", "Bearer " + tokenAdminRegional))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        assertThat(matriculesDe(reponse)).containsExactlyInAnyOrder("PN-2024-00403", "PN-2024-00404");
+    }
+
+    @Test
+    void lister_commeAdminNational_shouldRetournerTousLesAgents() throws Exception {
+        Region regionA = creerRegion("Region A");
+        Region regionB = creerRegion("Region B");
+        Poste posteA = creerPoste(regionA, "Poste A");
+        Poste posteB = creerPoste(regionB, "Poste B");
+        String tokenAdminNational = creerEtLoginToken("PN-2024-00406", Role.ADMIN_NATIONAL, posteA);
+        creerAgentActif(posteA, "PN-2024-00407", Role.AGENT);
+        creerAgentActif(posteB, "PN-2024-00408", Role.AGENT);
+
+        String reponse = mockMvc.perform(get("/api/v1/agents")
+                        .header("Authorization", "Bearer " + tokenAdminNational))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        assertThat(matriculesDe(reponse))
+                .containsExactlyInAnyOrder("PN-2024-00406", "PN-2024-00407", "PN-2024-00408");
+    }
+
+    @Test
+    void lister_commeAgent_shouldRetourner403() throws Exception {
+        Poste poste = creerPoste();
+        String token = creerEtLoginToken("PN-2024-00409", Role.AGENT, poste);
+
+        mockMvc.perform(get("/api/v1/agents")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void lister_commeAuditeur_shouldRetourner403() throws Exception {
+        Poste poste = creerPoste();
+        String token = creerEtLoginToken("PN-2024-00410", Role.AUDITEUR, poste);
+
+        mockMvc.perform(get("/api/v1/agents")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void creer_commeChefPoste_versSonPropresPoste_avecRoleAgent_shouldRetourner201() throws Exception {
+        Poste poste = creerPoste();
+        String tokenChef = creerEtLoginToken("PN-2024-00411", Role.CHEF_POSTE, poste);
+
+        mockMvc.perform(post("/api/v1/agents")
+                        .header("Authorization", "Bearer " + tokenChef)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(creerAgentJson(poste.getId(), "PN-2024-00412", "Nouvel Agent", Role.AGENT)))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
+    void creer_commeChefPoste_versAutrePoste_shouldRetourner403() throws Exception {
+        Region region = creerRegion("Dakar");
+        Poste posteChef = creerPoste(region, "Poste Chef");
+        Poste autrePoste = creerPoste(region, "Autre Poste");
+        String tokenChef = creerEtLoginToken("PN-2024-00413", Role.CHEF_POSTE, posteChef);
+
+        mockMvc.perform(post("/api/v1/agents")
+                        .header("Authorization", "Bearer " + tokenChef)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(creerAgentJson(autrePoste.getId(), "PN-2024-00414", "Nouvel Agent", Role.AGENT)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void creer_commeChefPoste_avecRoleChefPoste_shouldRetourner403() throws Exception {
+        Poste poste = creerPoste();
+        String tokenChef = creerEtLoginToken("PN-2024-00415", Role.CHEF_POSTE, poste);
+
+        mockMvc.perform(post("/api/v1/agents")
+                        .header("Authorization", "Bearer " + tokenChef)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(creerAgentJson(poste.getId(), "PN-2024-00416", "Nouveau Chef", Role.CHEF_POSTE)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void creer_commeAdminRegional_versPosteDeSaRegion_avecRoleChefPoste_shouldRetourner201() throws Exception {
+        Region region = creerRegion("Dakar");
+        Poste posteAdmin = creerPoste(region, "Poste Admin");
+        Poste posteCible = creerPoste(region, "Poste Cible");
+        String tokenAdminRegional = creerEtLoginToken("PN-2024-00417", Role.ADMIN_REGIONAL, posteAdmin);
+
+        mockMvc.perform(post("/api/v1/agents")
+                        .header("Authorization", "Bearer " + tokenAdminRegional)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(creerAgentJson(posteCible.getId(), "PN-2024-00418", "Nouveau Chef", Role.CHEF_POSTE)))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
+    void creer_commeAdminRegional_versPosteHorsRegion_shouldRetourner403() throws Exception {
+        Region regionA = creerRegion("Region A");
+        Region regionB = creerRegion("Region B");
+        Poste posteAdmin = creerPoste(regionA, "Poste Admin");
+        Poste posteHorsRegion = creerPoste(regionB, "Poste Hors Region");
+        String tokenAdminRegional = creerEtLoginToken("PN-2024-00419", Role.ADMIN_REGIONAL, posteAdmin);
+
+        mockMvc.perform(post("/api/v1/agents")
+                        .header("Authorization", "Bearer " + tokenAdminRegional)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(creerAgentJson(posteHorsRegion.getId(), "PN-2024-00420", "Nouvel Agent", Role.AGENT)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void creer_commeAdminRegional_avecRoleAdminNational_shouldRetourner403() throws Exception {
+        Poste poste = creerPoste();
+        String tokenAdminRegional = creerEtLoginToken("PN-2024-00421", Role.ADMIN_REGIONAL, poste);
+
+        mockMvc.perform(post("/api/v1/agents")
+                        .header("Authorization", "Bearer " + tokenAdminRegional)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(creerAgentJson(poste.getId(), "PN-2024-00422", "Nouvel Admin", Role.ADMIN_NATIONAL)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void creer_commeAdminNational_avecRoleAdminNational_shouldRetourner201() throws Exception {
+        Poste poste = creerPoste();
+        String tokenAdminNational = creerEtLoginToken("PN-2024-00423", Role.ADMIN_NATIONAL, poste);
+
+        mockMvc.perform(post("/api/v1/agents")
+                        .header("Authorization", "Bearer " + tokenAdminNational)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(creerAgentJson(poste.getId(), "PN-2024-00424", "Nouvel Admin", Role.ADMIN_NATIONAL)))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
+    void creer_commeAuditeur_shouldRetourner403() throws Exception {
+        Poste poste = creerPoste();
+        String tokenAuditeur = creerEtLoginToken("PN-2024-00425", Role.AUDITEUR, poste);
+
+        mockMvc.perform(post("/api/v1/agents")
+                        .header("Authorization", "Bearer " + tokenAuditeur)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(creerAgentJson(poste.getId(), "PN-2024-00426", "Nouvel Agent", Role.AGENT)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void modifier_commeChefPoste_agentDeSonPoste_shouldRetourner200() throws Exception {
+        Poste poste = creerPoste();
+        String tokenChef = creerEtLoginToken("PN-2024-00427", Role.CHEF_POSTE, poste);
+        Agent agentCible = creerAgentActif(poste, "PN-2024-00428", Role.AGENT);
+
+        mockMvc.perform(patch("/api/v1/agents/" + agentCible.getId())
+                        .header("Authorization", "Bearer " + tokenChef)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(modifierAgentJson("Nouveau Nom", null)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nom").value("Nouveau Nom"));
+    }
+
+    @Test
+    void modifier_commeChefPoste_agentDAutrePoste_shouldRetourner403() throws Exception {
+        Region region = creerRegion("Dakar");
+        Poste posteChef = creerPoste(region, "Poste Chef");
+        Poste autrePoste = creerPoste(region, "Autre Poste");
+        String tokenChef = creerEtLoginToken("PN-2024-00429", Role.CHEF_POSTE, posteChef);
+        Agent agentCible = creerAgentActif(autrePoste, "PN-2024-00430", Role.AGENT);
+
+        mockMvc.perform(patch("/api/v1/agents/" + agentCible.getId())
+                        .header("Authorization", "Bearer " + tokenChef)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(modifierAgentJson("Nouveau Nom", null)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void modifier_commeChefPoste_versAutrePoste_shouldRetourner403() throws Exception {
+        Region region = creerRegion("Dakar");
+        Poste posteChef = creerPoste(region, "Poste Chef");
+        Poste autrePoste = creerPoste(region, "Autre Poste");
+        String tokenChef = creerEtLoginToken("PN-2024-00431", Role.CHEF_POSTE, posteChef);
+        Agent agentCible = creerAgentActif(posteChef, "PN-2024-00432", Role.AGENT);
+
+        mockMvc.perform(patch("/api/v1/agents/" + agentCible.getId())
+                        .header("Authorization", "Bearer " + tokenChef)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(modifierAgentJson(null, autrePoste.getId())))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void modifier_commeAdminRegional_agentDeSaRegion_shouldRetourner200() throws Exception {
+        Region region = creerRegion("Dakar");
+        Poste posteAdmin = creerPoste(region, "Poste Admin");
+        Poste autrePosteMemeRegion = creerPoste(region, "Autre Poste Meme Region");
+        String tokenAdminRegional = creerEtLoginToken("PN-2024-00433", Role.ADMIN_REGIONAL, posteAdmin);
+        Agent agentCible = creerAgentActif(autrePosteMemeRegion, "PN-2024-00434", Role.AGENT);
+
+        mockMvc.perform(patch("/api/v1/agents/" + agentCible.getId())
+                        .header("Authorization", "Bearer " + tokenAdminRegional)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(modifierAgentJson("Nouveau Nom", null)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nom").value("Nouveau Nom"));
+    }
+
+    @Test
+    void modifier_commeAdminRegional_agentHorsRegion_shouldRetourner403() throws Exception {
+        Region regionA = creerRegion("Region A");
+        Region regionB = creerRegion("Region B");
+        Poste posteAdmin = creerPoste(regionA, "Poste Admin");
+        Poste posteHorsRegion = creerPoste(regionB, "Poste Hors Region");
+        String tokenAdminRegional = creerEtLoginToken("PN-2024-00435", Role.ADMIN_REGIONAL, posteAdmin);
+        Agent agentCible = creerAgentActif(posteHorsRegion, "PN-2024-00436", Role.AGENT);
+
+        mockMvc.perform(patch("/api/v1/agents/" + agentCible.getId())
+                        .header("Authorization", "Bearer " + tokenAdminRegional)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(modifierAgentJson("Nouveau Nom", null)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void modifier_commeAdminRegional_versPosteHorsRegion_shouldRetourner403() throws Exception {
+        Region regionA = creerRegion("Region A");
+        Region regionB = creerRegion("Region B");
+        Poste posteAdmin = creerPoste(regionA, "Poste Admin");
+        Poste posteHorsRegion = creerPoste(regionB, "Poste Hors Region");
+        String tokenAdminRegional = creerEtLoginToken("PN-2024-00437", Role.ADMIN_REGIONAL, posteAdmin);
+        Agent agentCible = creerAgentActif(posteAdmin, "PN-2024-00438", Role.AGENT);
+
+        mockMvc.perform(patch("/api/v1/agents/" + agentCible.getId())
+                        .header("Authorization", "Bearer " + tokenAdminRegional)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(modifierAgentJson(null, posteHorsRegion.getId())))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void modifier_commeAgent_shouldRetourner403() throws Exception {
+        Poste poste = creerPoste();
+        String tokenAgent = creerEtLoginToken("PN-2024-00439", Role.AGENT, poste);
+
+        mockMvc.perform(patch("/api/v1/agents/" + UUID.randomUUID())
+                        .header("Authorization", "Bearer " + tokenAgent)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(modifierAgentJson("Nouveau Nom", null)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void modifier_commeChefPoste_avecIdInconnu_shouldRetourner404() throws Exception {
+        Poste poste = creerPoste();
+        String tokenChef = creerEtLoginToken("PN-2024-00440", Role.CHEF_POSTE, poste);
+
+        mockMvc.perform(patch("/api/v1/agents/" + UUID.randomUUID())
+                        .header("Authorization", "Bearer " + tokenChef)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(modifierAgentJson("Nouveau Nom", null)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("AGENT_INTROUVABLE"));
+    }
+
+    @Test
+    void desactiver_commeChefPoste_agentDeSonPoste_shouldRetourner204() throws Exception {
+        Poste poste = creerPoste();
+        String tokenChef = creerEtLoginToken("PN-2024-00441", Role.CHEF_POSTE, poste);
+        Agent agentCible = creerAgentActif(poste, "PN-2024-00442", Role.AGENT);
+
+        mockMvc.perform(delete("/api/v1/agents/" + agentCible.getId())
+                        .header("Authorization", "Bearer " + tokenChef))
+                .andExpect(status().isNoContent());
+    }
+
+    @Test
+    void desactiver_commeChefPoste_agentDAutrePoste_shouldRetourner403() throws Exception {
+        Region region = creerRegion("Dakar");
+        Poste posteChef = creerPoste(region, "Poste Chef");
+        Poste autrePoste = creerPoste(region, "Autre Poste");
+        String tokenChef = creerEtLoginToken("PN-2024-00443", Role.CHEF_POSTE, posteChef);
+        Agent agentCible = creerAgentActif(autrePoste, "PN-2024-00444", Role.AGENT);
+
+        mockMvc.perform(delete("/api/v1/agents/" + agentCible.getId())
+                        .header("Authorization", "Bearer " + tokenChef))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void desactiver_commeAdminRegional_agentDeSaRegion_shouldRetourner204() throws Exception {
+        Region region = creerRegion("Dakar");
+        Poste posteAdmin = creerPoste(region, "Poste Admin");
+        Poste autrePosteMemeRegion = creerPoste(region, "Autre Poste Meme Region");
+        String tokenAdminRegional = creerEtLoginToken("PN-2024-00445", Role.ADMIN_REGIONAL, posteAdmin);
+        Agent agentCible = creerAgentActif(autrePosteMemeRegion, "PN-2024-00446", Role.AGENT);
+
+        mockMvc.perform(delete("/api/v1/agents/" + agentCible.getId())
+                        .header("Authorization", "Bearer " + tokenAdminRegional))
+                .andExpect(status().isNoContent());
+    }
+
+    @Test
+    void desactiver_commeAdminRegional_agentHorsRegion_shouldRetourner403() throws Exception {
+        Region regionA = creerRegion("Region A");
+        Region regionB = creerRegion("Region B");
+        Poste posteAdmin = creerPoste(regionA, "Poste Admin");
+        Poste posteHorsRegion = creerPoste(regionB, "Poste Hors Region");
+        String tokenAdminRegional = creerEtLoginToken("PN-2024-00447", Role.ADMIN_REGIONAL, posteAdmin);
+        Agent agentCible = creerAgentActif(posteHorsRegion, "PN-2024-00448", Role.AGENT);
+
+        mockMvc.perform(delete("/api/v1/agents/" + agentCible.getId())
+                        .header("Authorization", "Bearer " + tokenAdminRegional))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void desactiver_commeAuditeur_shouldRetourner403() throws Exception {
+        Poste poste = creerPoste();
+        String tokenAuditeur = creerEtLoginToken("PN-2024-00449", Role.AUDITEUR, poste);
+
+        mockMvc.perform(delete("/api/v1/agents/" + UUID.randomUUID())
+                        .header("Authorization", "Bearer " + tokenAuditeur))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void desactiver_commeChefPoste_avecIdInconnu_shouldRetourner404() throws Exception {
+        Poste poste = creerPoste();
+        String tokenChef = creerEtLoginToken("PN-2024-00450", Role.CHEF_POSTE, poste);
+
+        mockMvc.perform(delete("/api/v1/agents/" + UUID.randomUUID())
+                        .header("Authorization", "Bearer " + tokenChef))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("AGENT_INTROUVABLE"));
+    }
+
+    @Test
+    void lister_commeChefPosteDesactiveApresEmissionDuToken_shouldRetourner403AccesRefuse() throws Exception {
+        Poste poste = creerPoste();
+        String tokenAdmin = creerEtLoginToken("PN-2024-00451", Role.ADMIN_NATIONAL, poste);
+        Agent chef = creerAgentActif(poste, "PN-2024-00452", Role.CHEF_POSTE);
+        String tokenChef = login("PN-2024-00452", MOT_DE_PASSE_CLAIR);
+
+        mockMvc.perform(delete("/api/v1/agents/" + chef.getId())
+                        .header("Authorization", "Bearer " + tokenAdmin))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/api/v1/agents")
+                        .header("Authorization", "Bearer " + tokenChef))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ACCES_REFUSE"));
+    }
+
+    @Test
+    void listerPostes_commeAgent_shouldRetourner200() throws Exception {
+        Poste poste = creerPoste();
+        String tokenAgent = creerEtLoginToken("PN-2024-00453", Role.AGENT, poste);
+
+        mockMvc.perform(get("/api/v1/postes")
+                        .header("Authorization", "Bearer " + tokenAgent))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void listerPostes_commeAuditeur_shouldRetourner200() throws Exception {
+        Poste poste = creerPoste();
+        String tokenAuditeur = creerEtLoginToken("PN-2024-00454", Role.AUDITEUR, poste);
+
+        mockMvc.perform(get("/api/v1/postes")
+                        .header("Authorization", "Bearer " + tokenAuditeur))
+                .andExpect(status().isOk());
     }
 }
