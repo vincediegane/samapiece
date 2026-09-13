@@ -3,6 +3,7 @@ package sn.samapiece.notifications;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
@@ -23,6 +24,7 @@ public class PasserelleSmsHttpClient implements PasserelleSms {
     private final RabbitTemplate rabbitTemplate;
     private final String senderId;
 
+    @Autowired
     public PasserelleSmsHttpClient(
             RestClient.Builder restClientBuilder, RabbitTemplate rabbitTemplate, SmsProperties proprietes) {
         this.rabbitTemplate = rabbitTemplate;
