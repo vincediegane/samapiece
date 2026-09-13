@@ -25,6 +25,9 @@ public class Piece {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
+    @Column(name = "numero_fiche", nullable = false, unique = true, length = 50)
+    private String numeroFiche;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "poste_id", nullable = false)
     private Poste poste;
@@ -78,6 +81,7 @@ public class Piece {
     }
 
     public Piece(
+            String numeroFiche,
             Poste poste,
             Agent agentCreateur,
             TypeDocument typeDocument,
@@ -90,6 +94,7 @@ public class Piece {
             LocalDate dateDepot,
             String etatDocument,
             String remarques) {
+        this.numeroFiche = numeroFiche;
         this.poste = poste;
         this.agentCreateur = agentCreateur;
         this.typeDocument = typeDocument;
@@ -107,6 +112,10 @@ public class Piece {
 
     public UUID getId() {
         return id;
+    }
+
+    public String getNumeroFiche() {
+        return numeroFiche;
     }
 
     public Poste getPoste() {

@@ -29,6 +29,7 @@ class PieceTest {
     private Piece nouvellePiece() {
         NumeroDocumentHache hache = new NumeroDocumentHasher().hacher(NUMERO_CLAIR_TEST);
         return new Piece(
+                "PC-3F2A9C1B-2026-00001",
                 poste(),
                 agentCreateur(),
                 TypeDocument.CNI,
@@ -71,6 +72,7 @@ class PieceTest {
 
         assertThat(constructeurs).hasSize(1);
         assertThat(constructeurs[0].getParameterTypes()).containsExactly(
+                String.class,
                 Poste.class,
                 Agent.class,
                 TypeDocument.class,
