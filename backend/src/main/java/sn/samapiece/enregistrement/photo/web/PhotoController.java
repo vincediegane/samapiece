@@ -10,7 +10,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 import sn.samapiece.enregistrement.photo.PhotoService;
@@ -32,7 +31,7 @@ public class PhotoController {
     public ResponseEntity<UploadPhotoResponse> uploader(
             @PathVariable UUID pieceId,
             @RequestParam TypePhoto type,
-            @RequestPart MultipartFile fichier) {
+            @RequestParam MultipartFile fichier) {
         return ResponseEntity.status(HttpStatus.CREATED).body(photoService.uploader(pieceId, type, fichier));
     }
 
