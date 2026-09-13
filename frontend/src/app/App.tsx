@@ -1,7 +1,7 @@
-import HomePage from '../features/home/HomePage';
+import AgentsPage from '../features/agents/AgentsPage';
 
 function App() {
-  return <HomePage />;
+  return <AgentsPage />;
 }
 
 export default App;
