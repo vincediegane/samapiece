@@ -51,7 +51,7 @@ class PhotoIntegrationTest {
     static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine");
 
     @Container
-    static MinIOContainer minio = new MinIOContainer("minio/minio:RELEASE.2025-09-07T16-13-09Z");
+    static MinIOContainer minio = new MinIOContainer("quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z");
 
     @DynamicPropertySource
     static void proprietesMinio(DynamicPropertyRegistry registry) {
