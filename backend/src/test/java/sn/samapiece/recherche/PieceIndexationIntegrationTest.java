@@ -22,6 +22,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -96,11 +97,19 @@ class PieceIndexationIntegrationTest {
     @Autowired
     private PieceRechercheIndexService indexService;
 
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
     private Client clientMeilisearchDeTest;
 
     @BeforeEach
     void nettoyer() {
         pieceRepository.deleteAll();
+        // piece_sequence n'est pas exposee par un repository Spring Data (acces exclusif via
+        // PieceNumeroFicheGenerator/JdbcTemplate) mais reference poste par FK : a vider avant
+        // posteRepository.deleteAll(), sinon la suppression du poste echoue (meme correctif que
+        // sur PieceIntegrationTest, ticket #11).
+        jdbcTemplate.update("DELETE FROM piece_sequence");
         agentRepository.deleteAll();
         posteRepository.deleteAll();
         regionRepository.deleteAll();
