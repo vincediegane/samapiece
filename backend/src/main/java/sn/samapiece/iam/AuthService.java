@@ -30,7 +30,7 @@ public class AuthService {
         this.jwtService = jwtService;
     }
 
-    @Transactional
+    @Transactional(noRollbackFor = {AuthenticationException.class, CompteVerrouilleException.class})
     public LoginResponse login(LoginRequest request) {
         Agent agent = agentRepository.findByMatricule(request.matricule())
                 .orElseThrow(() -> new AuthenticationException("Identifiants invalides"));
