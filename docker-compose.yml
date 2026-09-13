@@ -10,24 +10,28 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE}
       SERVER_PORT: ${SERVER_PORT}
-      # NOTE: DB_* est transmis pour préparer un ticket futur (JPA/Flyway réel).
-      # Le backend actuel ne les utilise jamais : spring.autoconfigure.exclude
-      # (ticket #1) désactive tout accès JDBC. /actuator/health répond UP même
-      # si postgres est down. Voir docs/bolts/3-docker-compose-dev/{design,spec}.md.
+      # NOTE: le backend utilise reellement DB_* depuis les tickets #9/#10
+      # (JPA/Flyway actifs, migrations V1-V6). Voir application-dev.yml.
       DB_HOST: postgres
       DB_PORT: ${DB_PORT}
       DB_NAME: ${DB_NAME}
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      MINIO_BUCKET_PHOTOS: ${MINIO_BUCKET_PHOTOS}
+      PHOTO_CLE_CHIFFREMENT: ${PHOTO_CLE_CHIFFREMENT}
+    depends_on:
+      minio:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/actuator/health"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 30s
-    # Pas de depends_on vers postgres/redis/etc. : voir note DB_* ci-dessus et
-    # section "Écarts identifiés" du spec — couplage volontairement absent.
 
   frontend:
     build:
