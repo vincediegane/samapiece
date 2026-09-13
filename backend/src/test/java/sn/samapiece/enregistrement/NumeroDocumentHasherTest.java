@@ -74,4 +74,49 @@ class NumeroDocumentHasherTest {
     void hacher_shouldRejeterNumeroVide() {
         assertThatThrownBy(() -> hasher.hacher("")).isInstanceOf(IllegalArgumentException.class);
     }
+
+    @Test
+    void verifier_shouldRenvoyerVrai_numeroCorrectEtSelCorrect() {
+        NumeroDocumentHache hache = hasher.hacher("123456789");
+
+        assertThat(hasher.verifier("123456789", hache.sel(), hache.hash())).isTrue();
+    }
+
+    @Test
+    void verifier_shouldRenvoyerFaux_numeroIncorrect() {
+        NumeroDocumentHache hache = hasher.hacher("123456789");
+
+        assertThat(hasher.verifier("999999999", hache.sel(), hache.hash())).isFalse();
+    }
+
+    @Test
+    void verifier_shouldRenvoyerFaux_selIncorrect() {
+        NumeroDocumentHache hache = hasher.hacher("123456789");
+
+        assertThat(hasher.verifier("123456789", "autresel", hache.hash())).isFalse();
+    }
+
+    @Test
+    void verifier_shouldRejeterNumeroNull() {
+        NumeroDocumentHache hache = hasher.hacher("123456789");
+
+        assertThatThrownBy(() -> hasher.verifier(null, hache.sel(), hache.hash()))
+                .isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    void verifier_shouldRejeterSelNull() {
+        NumeroDocumentHache hache = hasher.hacher("123456789");
+
+        assertThatThrownBy(() -> hasher.verifier("123456789", null, hache.hash()))
+                .isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    void verifier_shouldRejeterHashAttenduNull() {
+        NumeroDocumentHache hache = hasher.hacher("123456789");
+
+        assertThatThrownBy(() -> hasher.verifier("123456789", hache.sel(), null))
+                .isInstanceOf(NullPointerException.class);
+    }
 }

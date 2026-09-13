@@ -44,6 +44,7 @@ public class SecurityConfig {
             .authorizeHttpRequests(authorize -> authorize
                     .requestMatchers(EndpointRequest.to(HealthEndpoint.class)).permitAll()
                     .requestMatchers(HttpMethod.GET, "/api/v1/postes").permitAll()
+                    .requestMatchers(HttpMethod.POST, "/api/v1/recherche-publique").permitAll()
                     .requestMatchers(HttpMethod.POST, "/api/v1/auth/login", "/api/v1/auth/refresh").permitAll()
                     .anyRequest().authenticated())
             .addFilterBefore(new JwtAuthenticationFilter(jwtService), UsernamePasswordAuthenticationFilter.class);

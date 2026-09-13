@@ -29,6 +29,13 @@ public class NumeroDocumentHasher {
         return new NumeroDocumentHache(hash, sel, masque);
     }
 
+    public boolean verifier(String numeroClair, String sel, String hashAttendu) {
+        Objects.requireNonNull(numeroClair, "numeroClair");
+        Objects.requireNonNull(sel, "sel");
+        Objects.requireNonNull(hashAttendu, "hashAttendu");
+        return calculerHash(sel, numeroClair).equals(hashAttendu);
+    }
+
     private String genererSel() {
         byte[] octets = new byte[TAILLE_SEL_OCTETS];
         RANDOM.nextBytes(octets);
