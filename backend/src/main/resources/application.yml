@@ -15,3 +15,7 @@ management:
   endpoint:
     health:
       show-details: never
+
+samapiece:
+  jwt:
+    secret: ${JWT_SECRET}

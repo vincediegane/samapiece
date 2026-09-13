@@ -10,6 +10,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.Objects;
 import java.util.UUID;
@@ -46,6 +47,12 @@ public class Agent {
     @Column(name = "derniere_connexion")
     private OffsetDateTime derniereConnexion;
 
+    @Column(name = "tentatives_echouees", nullable = false)
+    private int tentativesEchouees;
+
+    @Column(name = "verrouille_jusqu_a")
+    private OffsetDateTime verrouilleJusqua;
+
     @Column(name = "cree_le", nullable = false, insertable = false, updatable = false)
     private OffsetDateTime creeLe;
 
@@ -63,6 +70,8 @@ public class Agent {
         this.hashMotDePasse = hashMotDePasse;
         this.actif = true;
         this.derniereConnexion = null;
+        this.tentativesEchouees = 0;
+        this.verrouilleJusqua = null;
     }
 
     public UUID getId() {
@@ -103,6 +112,37 @@ public class Agent {
 
     public OffsetDateTime getMajLe() {
         return majLe;
+    }
+
+    public int getTentativesEchouees() {
+        return tentativesEchouees;
+    }
+
+    public OffsetDateTime getVerrouilleJusqua() {
+        return verrouilleJusqua;
+    }
+
+    public void enregistrerConnexionReussie() {
+        this.tentativesEchouees = 0;
+        this.verrouilleJusqua = null;
+        this.derniereConnexion = OffsetDateTime.now();
+    }
+
+    /**
+     * Incrémente le compteur d'échecs ; si le seuil est atteint, verrouille le compte pour la
+     * durée donnée et réinitialise le compteur (le prochain cycle de comptage repart de zéro
+     * après expiration du verrouillage).
+     */
+    public void enregistrerEchecConnexion(int seuil, Duration dureeVerrouillage) {
+        this.tentativesEchouees++;
+        if (this.tentativesEchouees >= seuil) {
+            this.verrouilleJusqua = OffsetDateTime.now().plus(dureeVerrouillage);
+            this.tentativesEchouees = 0;
+        }
+    }
+
+    public boolean estVerrouille() {
+        return verrouilleJusqua != null && verrouilleJusqua.isAfter(OffsetDateTime.now());
     }
 
     @Override

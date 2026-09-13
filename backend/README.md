@@ -20,6 +20,15 @@ docker-compose up postgres
 ou toute instance PostgreSQL locale équivalente exposant les mêmes variables
 `DB_HOST`/`DB_PORT`/`DB_NAME`/`DB_USER`/`DB_PASSWORD` attendues par le profil `dev`.
 
+Le backend nécessite également la variable `JWT_SECRET` (obligatoire, aucune valeur par
+défaut) : un secret HMAC-SHA256 d'au moins 256 bits, soit au moins 32 caractères, utilisé pour
+signer les access/refresh tokens émis par `POST /api/v1/auth/login`. En générer une valeur en
+local avec :
+
+```bash
+openssl rand -base64 32
+```
+
 Puis, depuis la racine du monorepo :
 
 ```bash

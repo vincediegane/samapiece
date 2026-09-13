@@ -121,9 +121,9 @@ class PosteIntegrationTest {
     }
 
     @Test
-    void getRouteNonPubliqueSansAuthentification_shouldReturn4xx() throws Exception {
+    void getRouteNonPubliqueSansAuthentification_shouldReturn401() throws Exception {
         // Route arbitraire non listée dans permitAll() : sert de témoin pour confirmer que
-        // anyRequest().authenticated() s'applique bien (401 ou 403 selon l'entry point par défaut).
-        mockMvc.perform(get("/api/v1/inexistant-protege")).andExpect(status().is4xxClientError());
+        // anyRequest().authenticated() s'applique bien, avec l'entry point 401 explicite.
+        mockMvc.perform(get("/api/v1/inexistant-protege")).andExpect(status().isUnauthorized());
     }
 }
