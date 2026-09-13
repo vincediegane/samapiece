@@ -35,10 +35,8 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Test
+        run: npm test
+
       - name: Build
         run: npm run build
-
-      # NOTE: pas d'étape "test" au sens strict ici — aucun framework de test
-      # frontend (Vitest/Jest) n'est installé à ce stade (décision actée dans
-      # design.md du ticket #2). Une étape `npm test` sera ajoutée par le
-      # premier ticket qui introduit Vitest et de vrais tests de composants.
