@@ -4,7 +4,8 @@ import { creerPiece } from './piecesApi';
 import type { CreerPieceRequest, EtatDocumentOption, PieceResponse, TypeDocument } from './types';
 import { ETAT_DOCUMENT_OPTIONS, TYPE_DOCUMENT_LABELS } from './types';
 
-type ChampRequis = 'typeDocument' | 'nomTitulaire' | 'prenomTitulaire' | 'numeroDocument' | 'dateDepot';
+type ChampRequis =
+  'typeDocument' | 'nomTitulaire' | 'prenomTitulaire' | 'numeroDocument' | 'dateDepot';
 
 interface FormState {
   typeDocument: TypeDocument | '';
@@ -40,7 +41,9 @@ function validerFormulaire(f: FormState): Partial<Record<ChampRequis, string>> {
 
 function EnregistrementPiecePage() {
   const [formulaire, setFormulaire] = useState<FormState>(FORMULAIRE_INITIAL);
-  const [erreursValidation, setErreursValidation] = useState<Partial<Record<ChampRequis, string>>>({});
+  const [erreursValidation, setErreursValidation] = useState<Partial<Record<ChampRequis, string>>>(
+    {},
+  );
   const [erreurServeur, setErreurServeur] = useState<string | null>(null);
   const [enEnvoi, setEnEnvoi] = useState(false);
   const [recu, setRecu] = useState<PieceResponse | null>(null);
@@ -69,7 +72,9 @@ function EnregistrementPiecePage() {
       setFormulaire(FORMULAIRE_INITIAL);
       setErreursValidation({});
     } catch (e) {
-      setErreurServeur(e instanceof Error ? e.message : 'Erreur inconnue lors de l’enregistrement.');
+      setErreurServeur(
+        e instanceof Error ? e.message : 'Erreur inconnue lors de l’enregistrement.',
+      );
     } finally {
       setEnEnvoi(false);
     }
@@ -119,7 +124,9 @@ function EnregistrementPiecePage() {
             ))}
           </select>
         </label>
-        {erreursValidation.typeDocument && <span role="alert">{erreursValidation.typeDocument}</span>}
+        {erreursValidation.typeDocument && (
+          <span role="alert">{erreursValidation.typeDocument}</span>
+        )}
 
         <label>
           Nom du titulaire
@@ -129,7 +136,9 @@ function EnregistrementPiecePage() {
             onChange={(e) => setFormulaire({ ...formulaire, nomTitulaire: e.target.value })}
           />
         </label>
-        {erreursValidation.nomTitulaire && <span role="alert">{erreursValidation.nomTitulaire}</span>}
+        {erreursValidation.nomTitulaire && (
+          <span role="alert">{erreursValidation.nomTitulaire}</span>
+        )}
 
         <label>
           Prénom du titulaire
