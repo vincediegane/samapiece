@@ -11,6 +11,7 @@ import com.meilisearch.sdk.Config;
 import com.meilisearch.sdk.exceptions.MeilisearchException;
 import com.meilisearch.sdk.model.TasksQuery;
 import com.meilisearch.sdk.model.TasksResults;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.UUID;
 import java.util.stream.Stream;
@@ -148,7 +149,7 @@ class RecherchePubliqueIntegrationTest {
                 .andExpect(status().isOk())
                 .andReturn()
                 .getResponse()
-                .getContentAsString();
+                .getContentAsString(StandardCharsets.UTF_8);
         return OBJECT_MAPPER.readTree(reponse).get("accessToken").asText();
     }
 
@@ -181,7 +182,7 @@ class RecherchePubliqueIntegrationTest {
                 .andExpect(status().isCreated())
                 .andReturn()
                 .getResponse()
-                .getContentAsString();
+                .getContentAsString(StandardCharsets.UTF_8);
         attendreLaTacheDIndexationLaPlusRecente();
         return OBJECT_MAPPER.readTree(reponse);
     }
@@ -217,7 +218,7 @@ class RecherchePubliqueIntegrationTest {
                 .andExpect(status().isOk())
                 .andReturn()
                 .getResponse()
-                .getContentAsString();
+                .getContentAsString(StandardCharsets.UTF_8);
         JsonNode corps = OBJECT_MAPPER.readTree(reponse);
 
         assertThat(corps.get("trouve").asBoolean()).isTrue();
@@ -225,7 +226,8 @@ class RecherchePubliqueIntegrationTest {
         assertThat(corps.get("referenceDossier").asText()).isEqualTo(numeroFiche);
         assertThat(corps.get("poste").get("nom").asText()).isEqualTo("Commissariat Central Dakar");
         assertThat(corps.get("poste").get("adresse").asText()).isEqualTo("Adresse Commissariat Central Dakar");
-        assertThat(corps.get("poste").get("horaires").asText()).isEqualTo(HORAIRES);
+        assertThat(OBJECT_MAPPER.readTree(corps.get("poste").get("horaires").asText()))
+                .isEqualTo(OBJECT_MAPPER.readTree(HORAIRES));
         assertThat(corps.get("poste").get("telephone").asText()).isEqualTo("+221338210000");
 
         assertThat(corps.fieldNames()).toIterable().containsExactlyInAnyOrder(
@@ -254,7 +256,7 @@ class RecherchePubliqueIntegrationTest {
                 .andExpect(status().isBadRequest())
                 .andReturn()
                 .getResponse()
-                .getContentAsString();
+                .getContentAsString(StandardCharsets.UTF_8);
         JsonNode corps = OBJECT_MAPPER.readTree(reponse);
 
         assertThat(corps.get("code").asText()).isEqualTo("CRITERES_INSUFFISANTS");
@@ -272,7 +274,7 @@ class RecherchePubliqueIntegrationTest {
                 .andExpect(status().isOk())
                 .andReturn()
                 .getResponse()
-                .getContentAsString();
+                .getContentAsString(StandardCharsets.UTF_8);
         JsonNode corps = OBJECT_MAPPER.readTree(reponse);
 
         assertThat(corps.get("trouve").asBoolean()).isFalse();
@@ -285,7 +287,7 @@ class RecherchePubliqueIntegrationTest {
     void statutNonDisponible_devraitRenvoyerTrouveFalseMemeSiIndexeDisponibleDansMeilisearch() throws Exception {
         JsonNode pieceCreee = creerPieceEtAttendreIndexation();
         UUID pieceId = UUID.fromString(pieceCreee.get("id").asText());
-        jdbcTemplate.update("UPDATE piece SET statut = 'RETIREE' WHERE id = ?", pieceId);
+        jdbcTemplate.update("UPDATE piece SET statut = 'retiree' WHERE id = ?", pieceId);
 
         String reponse = mockMvc.perform(post("/api/v1/recherche-publique")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -293,7 +295,7 @@ class RecherchePubliqueIntegrationTest {
                 .andExpect(status().isOk())
                 .andReturn()
                 .getResponse()
-                .getContentAsString();
+                .getContentAsString(StandardCharsets.UTF_8);
         JsonNode corps = OBJECT_MAPPER.readTree(reponse);
 
         assertThat(corps.get("trouve").asBoolean()).isFalse();
@@ -309,7 +311,7 @@ class RecherchePubliqueIntegrationTest {
                 .andExpect(status().isOk())
                 .andReturn()
                 .getResponse()
-                .getContentAsString();
+                .getContentAsString(StandardCharsets.UTF_8);
         JsonNode corps = OBJECT_MAPPER.readTree(reponse);
 
         assertThat(corps.get("trouve").asBoolean()).isFalse();
@@ -325,7 +327,7 @@ class RecherchePubliqueIntegrationTest {
                 .andExpect(status().isOk())
                 .andReturn()
                 .getResponse()
-                .getContentAsString();
+                .getContentAsString(StandardCharsets.UTF_8);
         JsonNode corps = OBJECT_MAPPER.readTree(reponse);
 
         assertThat(corps.get("trouve").asBoolean()).isFalse();
@@ -341,7 +343,7 @@ class RecherchePubliqueIntegrationTest {
                 .andExpect(status().isOk())
                 .andReturn()
                 .getResponse()
-                .getContentAsString();
+                .getContentAsString(StandardCharsets.UTF_8);
         JsonNode corps = OBJECT_MAPPER.readTree(reponse);
 
         assertThat(corps.get("trouve").asBoolean()).isFalse();
