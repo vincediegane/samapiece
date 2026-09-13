@@ -26,10 +26,21 @@ services:
       MEILISEARCH_HOST: http://meilisearch:7700
       MEILISEARCH_API_KEY: ${MEILI_MASTER_KEY}
       MEILISEARCH_INDEX_PIECES: ${MEILISEARCH_INDEX_PIECES}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_DEFAULT_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_DEFAULT_PASS}
+      SMS_API_ENDPOINT: ${SMS_API_ENDPOINT}
+      SMS_API_KEY: ${SMS_API_KEY}
+      SMS_SENDER_ID: ${SMS_SENDER_ID}
+      SMS_TIMEOUT_MS: ${SMS_TIMEOUT_MS}
+      SMS_MAX_TENTATIVES: ${SMS_MAX_TENTATIVES}
     depends_on:
       minio:
         condition: service_healthy
       meilisearch:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/actuator/health"]
