@@ -1,6 +1,8 @@
 package sn.samapiece;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import org.junit.jupiter.api.Test;
@@ -32,5 +34,17 @@ class SamaPieceApplicationTests {
     @Test
     void healthEndpoint_shouldReturn200() throws Exception {
         mockMvc.perform(get("/actuator/health")).andExpect(status().isOk());
+    }
+
+    @Test
+    void infoEndpoint_shouldReturn200() throws Exception {
+        mockMvc.perform(get("/actuator/info"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.build").exists());
+    }
+
+    @Test
+    void sentryDoitEtreDesactiveSansDsn() {
+        assertThat(io.sentry.Sentry.isEnabled()).isFalse();
     }
 }

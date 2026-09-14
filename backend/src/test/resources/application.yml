@@ -5,6 +5,10 @@ management:
     redis:
       enabled: false
 
+sentry:
+  dsn: ""
+  environment: test
+
 samapiece:
   jwt:
     secret: test-secret-uniquement-pour-les-tests-automatises-ne-jamais-reutiliser

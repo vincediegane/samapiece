@@ -21,6 +21,8 @@ import sn.samapiece.referentiel.Poste;
 @Service
 public class PieceService {
 
+    private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(PieceService.class);
+
     private final PieceRepository pieceRepository;
     private final AgentRepository agentRepository;
     private final RetraitRepository retraitRepository;
@@ -67,6 +69,8 @@ public class PieceService {
                 request.remarques());
 
         pieceRepository.saveAndFlush(piece);
+
+        LOG.info("Piece creee id={} numeroFiche={}", piece.getId(), piece.getNumeroFiche());
 
         PieceRechercheDocument document = new PieceRechercheDocument(
                 piece.getId(),
