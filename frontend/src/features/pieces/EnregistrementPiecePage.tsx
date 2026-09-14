@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
-import { creerPiece } from './piecesApi';
+import { creerPiece, PieceApiError } from './piecesApi';
 import type { CreerPieceRequest, EtatDocumentOption, PieceResponse, TypeDocument } from './types';
 import { ETAT_DOCUMENT_OPTIONS, TYPE_DOCUMENT_LABELS } from './types';
+import { mettreEnFile } from '../../shared/offline/fileSynchronisation';
+import FileAttenteSynchronisation from './FileAttenteSynchronisation';
 
 type ChampRequis =
   'typeDocument' | 'nomTitulaire' | 'prenomTitulaire' | 'numeroDocument' | 'dateDepot';
@@ -45,36 +47,48 @@ function EnregistrementPiecePage() {
     {},
   );
   const [erreurServeur, setErreurServeur] = useState<string | null>(null);
+  const [messageMiseEnFile, setMessageMiseEnFile] = useState<string | null>(null);
   const [enEnvoi, setEnEnvoi] = useState(false);
   const [recu, setRecu] = useState<PieceResponse | null>(null);
 
   async function soumettreFormulaire(evenement: FormEvent) {
     evenement.preventDefault();
     setErreurServeur(null);
+    setMessageMiseEnFile(null);
     const erreurs = validerFormulaire(formulaire);
     setErreursValidation(erreurs);
     if (Object.keys(erreurs).length > 0) return;
 
     setEnEnvoi(true);
+    const payload: CreerPieceRequest = {
+      typeDocument: formulaire.typeDocument as TypeDocument,
+      nomTitulaire: formulaire.nomTitulaire.trim(),
+      prenomTitulaire: formulaire.prenomTitulaire.trim(),
+      numeroDocument: formulaire.numeroDocument.trim(),
+      dateNaissanceTitulaire: formulaire.dateNaissanceTitulaire || null,
+      dateDepot: formulaire.dateDepot,
+      etatDocument: formulaire.etatDocument || null,
+      remarques: formulaire.remarques.trim() || null,
+    };
     try {
-      const payload: CreerPieceRequest = {
-        typeDocument: formulaire.typeDocument as TypeDocument,
-        nomTitulaire: formulaire.nomTitulaire.trim(),
-        prenomTitulaire: formulaire.prenomTitulaire.trim(),
-        numeroDocument: formulaire.numeroDocument.trim(),
-        dateNaissanceTitulaire: formulaire.dateNaissanceTitulaire || null,
-        dateDepot: formulaire.dateDepot,
-        etatDocument: formulaire.etatDocument || null,
-        remarques: formulaire.remarques.trim() || null,
-      };
       const resultat = await creerPiece(payload);
       setRecu(resultat);
       setFormulaire(FORMULAIRE_INITIAL);
       setErreursValidation({});
     } catch (e) {
-      setErreurServeur(
-        e instanceof Error ? e.message : 'Erreur inconnue lors de l’enregistrement.',
-      );
+      const estEchecReseau = !(e instanceof PieceApiError) || !navigator.onLine;
+      if (estEchecReseau) {
+        await mettreEnFile(payload);
+        setFormulaire(FORMULAIRE_INITIAL);
+        setErreursValidation({});
+        setMessageMiseEnFile(
+          'Pas de connexion : la fiche a été enregistrée localement, elle sera synchronisée automatiquement.',
+        );
+      } else {
+        setErreurServeur(
+          e instanceof Error ? e.message : 'Erreur inconnue lors de l’enregistrement.',
+        );
+      }
     } finally {
       setEnEnvoi(false);
     }
@@ -85,6 +99,8 @@ function EnregistrementPiecePage() {
       <h1>Enregistrement d&apos;une pièce</h1>
 
       {erreurServeur && <p role="alert">{erreurServeur}</p>}
+
+      {messageMiseEnFile && <p>{messageMiseEnFile}</p>}
 
       {recu && (
         <section aria-label="Reçu d'enregistrement">
@@ -214,6 +230,8 @@ function EnregistrementPiecePage() {
           Enregistrer la pièce
         </button>
       </form>
+
+      <FileAttenteSynchronisation />
     </main>
   );
 }
