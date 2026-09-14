@@ -3,12 +3,16 @@ package sn.samapiece.enregistrement;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -89,13 +93,31 @@ class PieceServiceTest {
                 LocalDate.of(1990, 5, 12),
                 LocalDate.of(2026, 9, 13),
                 "bon état",
-                "trouvée sur la voie publique");
+                "trouvée sur la voie publique",
+                false);
+    }
+
+    private CreerPieceRequest requete(boolean confirmerMalgreDoublon) {
+        return new CreerPieceRequest(
+                TypeDocument.CNI,
+                "Fall",
+                "Moussa",
+                "1234567890123",
+                LocalDate.of(1990, 5, 12),
+                LocalDate.of(2026, 9, 13),
+                "bon état",
+                "trouvée sur la voie publique",
+                confirmerMalgreDoublon);
     }
 
     private Piece pieceExistante(Poste poste, Agent agentCreateur) {
+        return pieceExistante(poste, agentCreateur, "PC-3F2A9C1B-2026-00001");
+    }
+
+    private Piece pieceExistante(Poste poste, Agent agentCreateur, String numeroFiche) {
         NumeroDocumentHache hache = new NumeroDocumentHasher().hacher("1234567890123");
         Piece piece = new Piece(
-                "PC-3F2A9C1B-2026-00001",
+                numeroFiche,
                 poste,
                 agentCreateur,
                 TypeDocument.CNI,
@@ -146,6 +168,99 @@ class PieceServiceTest {
         assertThat(evenement.numeroFiche()).isEqualTo("PC-3F2A9C1B-2026-00001");
         assertThat(evenement.posteNom()).isEqualTo(poste.getNom());
         assertThat(evenement.pieceId()).isNotNull();
+    }
+
+    @Test
+    void creer_avecNumeroDocumentCorrespondantAUneFicheActive_shouldLeverDoublonPotentielException() {
+        Poste poste = poste();
+        Agent appelant = connecterCommeAppelant(poste);
+        Piece candidat = pieceExistante(poste, appelant);
+        when(pieceRepository.findByTypeDocumentAndStatutIn(eq(TypeDocument.CNI), anyCollection()))
+                .thenReturn(List.of(candidat));
+        when(numeroDocumentHasher.verifier(eq("1234567890123"), any(), any())).thenReturn(true);
+
+        assertThatThrownBy(() -> pieceService.creer(requete()))
+                .isInstanceOf(DoublonPotentielException.class)
+                .extracting(ex -> ((DoublonPotentielException) ex).getNumerosFicheCandidats())
+                .isEqualTo(List.of(candidat.getNumeroFiche()));
+
+        verify(pieceRepository, never()).saveAndFlush(any());
+        verify(eventPublisher, never()).publishEvent(any());
+    }
+
+    @Test
+    void creer_shouldInterrogerShortlistAvecStatutsActifsAttendus() {
+        Poste poste = poste();
+        connecterCommeAppelant(poste);
+        when(numeroDocumentHasher.hacher("1234567890123"))
+                .thenReturn(new NumeroDocumentHache("hash", "sel", "masque"));
+        when(pieceRepository.findByTypeDocumentAndStatutIn(eq(TypeDocument.CNI), anyCollection()))
+                .thenReturn(List.of());
+
+        pieceService.creer(requete());
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Collection<StatutPiece>> statutsCaptor = ArgumentCaptor.forClass(Collection.class);
+        verify(pieceRepository).findByTypeDocumentAndStatutIn(eq(TypeDocument.CNI), statutsCaptor.capture());
+        assertThat(statutsCaptor.getValue()).isEqualTo(
+                List.of(StatutPiece.DISPONIBLE, StatutPiece.RECLAMEE, StatutPiece.LITIGE, StatutPiece.SIGNALEE));
+    }
+
+    @Test
+    void creer_avecConfirmerMalgreDoublonTrue_shouldCourtCircuiterVerificationEtCreerMalgreCandidatCorrespondant() {
+        Poste poste = poste();
+        connecterCommeAppelant(poste);
+        when(numeroDocumentHasher.hacher("1234567890123"))
+                .thenReturn(new NumeroDocumentHache("hash", "sel", "masque"));
+        when(numeroDocumentHasher.verifier(any(), any(), any())).thenReturn(true);
+        when(pieceRepository.saveAndFlush(any(Piece.class))).thenAnswer(invocation -> {
+            Piece piece = invocation.getArgument(0);
+            ReflectionTestUtils.setField(piece, "id", UUID.randomUUID());
+            return piece;
+        });
+
+        pieceService.creer(requete(true));
+
+        verify(pieceRepository, never()).findByTypeDocumentAndStatutIn(any(), any());
+        ArgumentCaptor<Piece> pieceCaptor = ArgumentCaptor.forClass(Piece.class);
+        verify(pieceRepository).saveAndFlush(pieceCaptor.capture());
+        assertThat(pieceCaptor.getValue().isCreeMalgreDoublon()).isTrue();
+    }
+
+    @Test
+    void creer_avecConfirmerMalgreDoublonFalseOuAbsent_sansDoublon_shouldCreerAvecCreeMalgreDoublonFalse() {
+        Poste poste = poste();
+        connecterCommeAppelant(poste);
+        when(numeroDocumentHasher.hacher("1234567890123"))
+                .thenReturn(new NumeroDocumentHache("hash", "sel", "masque"));
+        when(pieceRepository.saveAndFlush(any(Piece.class))).thenAnswer(invocation -> {
+            Piece piece = invocation.getArgument(0);
+            ReflectionTestUtils.setField(piece, "id", UUID.randomUUID());
+            return piece;
+        });
+
+        pieceService.creer(requete());
+
+        ArgumentCaptor<Piece> pieceCaptor = ArgumentCaptor.forClass(Piece.class);
+        verify(pieceRepository).saveAndFlush(pieceCaptor.capture());
+        assertThat(pieceCaptor.getValue().isCreeMalgreDoublon()).isFalse();
+    }
+
+    @Test
+    void creer_avecPlusieursCandidatsCorrespondants_shouldInclureTousLesNumerosFicheDansException() {
+        Poste poste = poste();
+        Agent appelant = connecterCommeAppelant(poste);
+        Piece candidat1 = pieceExistante(poste, appelant, "PC-3F2A9C1B-2026-00001");
+        Piece candidat2 = pieceExistante(poste, appelant, "PC-3F2A9C1B-2026-00002");
+        when(pieceRepository.findByTypeDocumentAndStatutIn(eq(TypeDocument.CNI), anyCollection()))
+                .thenReturn(List.of(candidat1, candidat2));
+        when(numeroDocumentHasher.verifier(eq("1234567890123"), any(), any())).thenReturn(true);
+
+        assertThatThrownBy(() -> pieceService.creer(requete()))
+                .isInstanceOf(DoublonPotentielException.class)
+                .extracting(ex -> ((DoublonPotentielException) ex).getNumerosFicheCandidats())
+                .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.list(String.class))
+                .hasSize(2);
     }
 
     @Test

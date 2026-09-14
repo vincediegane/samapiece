@@ -1,5 +1,6 @@
 package sn.samapiece.enregistrement;
 
+import java.util.List;
 import java.util.UUID;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -20,6 +21,9 @@ import sn.samapiece.referentiel.Poste;
 
 @Service
 public class PieceService {
+
+    private static final List<StatutPiece> STATUTS_ACTIFS =
+            List.of(StatutPiece.DISPONIBLE, StatutPiece.RECLAMEE, StatutPiece.LITIGE, StatutPiece.SIGNALEE);
 
     private final PieceRepository pieceRepository;
     private final AgentRepository agentRepository;
@@ -51,6 +55,10 @@ public class PieceService {
         Agent appelant = appelantCourant();
         Poste poste = appelant.getPoste();
 
+        if (!request.confirmerMalgreDoublon()) {
+            detecterDoublon(request.typeDocument(), request.numeroDocument());
+        }
+
         NumeroDocumentHache hache = numeroDocumentHasher.hacher(request.numeroDocument());
         String numeroFiche = numeroFicheGenerator.genererNumeroFiche(poste.getId(), request.dateDepot());
 
@@ -67,7 +75,8 @@ public class PieceService {
                 request.dateNaissanceTitulaire(),
                 request.dateDepot(),
                 request.etatDocument(),
-                request.remarques());
+                request.remarques(),
+                request.confirmerMalgreDoublon());
 
         pieceRepository.saveAndFlush(piece);
 
@@ -91,6 +100,18 @@ public class PieceService {
                 piece.getPoste().getNom()));
 
         return PieceResponse.of(piece);
+    }
+
+    private void detecterDoublon(TypeDocument typeDocument, String numeroDocumentClair) {
+        List<Piece> candidats = pieceRepository.findByTypeDocumentAndStatutIn(typeDocument, STATUTS_ACTIFS);
+        List<String> numerosFicheCorrespondants = candidats.stream()
+                .filter(candidat -> numeroDocumentHasher.verifier(
+                        numeroDocumentClair, candidat.getNumeroDocumentSel(), candidat.getNumeroDocumentHash()))
+                .map(Piece::getNumeroFiche)
+                .toList();
+        if (!numerosFicheCorrespondants.isEmpty()) {
+            throw new DoublonPotentielException(numerosFicheCorrespondants);
+        }
     }
 
     @Transactional(readOnly = true)
