@@ -71,11 +71,11 @@ class PieceTest {
     }
 
     @Test
-    void piece_shouldAvoirUnSeulConstructeurPublicNAcceptantAucunNumeroBrutCandidat() {
+    void piece_shouldAvoirDeuxConstructeursPublicsNAcceptantAucunNumeroBrutCandidat() {
         Constructor<?>[] constructeurs = Piece.class.getConstructors();
 
-        assertThat(constructeurs).hasSize(1);
-        assertThat(constructeurs[0].getParameterTypes()).containsExactly(
+        assertThat(constructeurs).hasSize(2);
+        Class<?>[] parametresLegacy = {
                 String.class,
                 Poste.class,
                 Agent.class,
@@ -88,7 +88,27 @@ class PieceTest {
                 LocalDate.class,
                 LocalDate.class,
                 String.class,
-                String.class);
+                String.class,
+        };
+        Class<?>[] parametresAvecCreeMalgreDoublon = {
+                String.class,
+                Poste.class,
+                Agent.class,
+                TypeDocument.class,
+                String.class,
+                String.class,
+                String.class,
+                String.class,
+                String.class,
+                LocalDate.class,
+                LocalDate.class,
+                String.class,
+                String.class,
+                boolean.class,
+        };
+        assertThat(constructeurs)
+                .extracting(Constructor::getParameterTypes)
+                .containsExactlyInAnyOrder(parametresLegacy, parametresAvecCreeMalgreDoublon);
     }
 
     @ParameterizedTest
