@@ -20,7 +20,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health
+        include: health,info
   endpoint:
     health:
       show-details: never
@@ -34,6 +34,10 @@ management:
       # Redis auto-configure (des que spring-boot-starter-data-redis est sur le classpath) ferait
       # basculer /actuator/health en 503 des que Redis est indisponible, contredisant ce choix.
       enabled: false
+
+sentry:
+  dsn: ${SENTRY_DSN:}
+  environment: ${SPRING_PROFILES_ACTIVE:dev}
 
 samapiece:
   jwt:

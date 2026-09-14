@@ -4,6 +4,9 @@ import { registerSW } from 'virtual:pwa-register';
 import { demarrerDeclencheurs } from './shared/offline/fileSynchronisation';
 import './index.css';
 import App from './app/App';
+import { initialiserSentry } from './observabilite/sentry';
+
+initialiserSentry();
 
 registerSW({ immediate: true });
 demarrerDeclencheurs();

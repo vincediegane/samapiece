@@ -1,9 +1,17 @@
 management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
   health:
     rabbit:
       enabled: false
     redis:
       enabled: false
+
+sentry:
+  dsn: ""
+  environment: test
 
 samapiece:
   jwt:
