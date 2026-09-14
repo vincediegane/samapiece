@@ -548,10 +548,12 @@ class PieceIntegrationTest {
                 .andReturn()
                 .getResponse()
                 .getContentAsString();
+        ObjectNode corpsDeuxiemePiece = creerPieceRequestJson(LocalDate.of(2026, 9, 13));
+        corpsDeuxiemePiece.put("numeroDocument", NUMERO_DOCUMENT_CLAIR + "-2");
         String reponse2 = mockMvc.perform(post("/api/v1/pieces")
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(creerPieceJson(LocalDate.of(2026, 9, 13))))
+                        .content(corpsDeuxiemePiece.toString()))
                 .andExpect(status().isCreated())
                 .andReturn()
                 .getResponse()
@@ -581,10 +583,12 @@ class PieceIntegrationTest {
                 .andReturn()
                 .getResponse()
                 .getContentAsString();
+        ObjectNode corpsDeuxiemePiece = creerPieceRequestJson(LocalDate.of(2026, 9, 13));
+        corpsDeuxiemePiece.put("numeroDocument", NUMERO_DOCUMENT_CLAIR + "-2");
         String reponse2 = mockMvc.perform(post("/api/v1/pieces")
                         .header("Authorization", "Bearer " + token2)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(creerPieceJson(LocalDate.of(2026, 9, 13))))
+                        .content(corpsDeuxiemePiece.toString()))
                 .andExpect(status().isCreated())
                 .andReturn()
                 .getResponse()
