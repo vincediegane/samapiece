@@ -1,0 +1,73 @@
+# Design -- #26 Vue "stock courant" par poste (Dashboard)
+
+## Approche
+
+Nouveau code dans le module `sn.samapiece.reporting`, qui existe deja comme package vide reserve depuis #1 ("Agregations statistiques, exports et tableaux de bord") -- pas de nouveau module `statistiques`, pas d'extension de `enregistrement`/`referentiel`. L'agregation (nombre de pieces en attente, anciennete moyenne/max) se fait via une requete SQL native sur `piece` (COUNT / AVG / MAX sur `CURRENT_DATE - date_depot`, arithmetique entiere directe sur PostgreSQL pour deux colonnes DATE) plutot que de charger les `Piece` en memoire pour les agreger cote Java -- c'est la premiere requete agregee du repo (aucun `@Query` existant a ce jour), le cout est l'absence de precedent a suivre, mais JPQL portable pour de l'arithmetique de dates est fragile/absent alors que le projet est deja engage exclusivement sur PostgreSQL (jsonb natif deja utilise ailleurs, ex. `Poste.horaires`). "Pieces en attente" = statuts `DISPONIBLE` + `RECLAMEE`, les deux seuls statuts source acceptes par `Piece.retirer()`/`Piece.signaler()` -- reutilisation directe de cette notion deja presente sur `main`, sans dependance au code de #15 (non merge). Le RBAC reutilise tel quel `PerimetrePoste.estDansPerimetre(appelant, poste)`, deja ecrit en anticipant ce ticket. Le seuil d'anciennete est une propriete Spring (`samapiece.reporting.seuil-anciennete-jours`, defaut 180) exposee dans la reponse JSON pour que le frontend affiche l'alerte visuelle sans deviner la config serveur ; l'alerte elle-meme est purement frontend (badge/couleur), aucune action serveur declenchee.
+
+Point important decouvert en explorant le code : rien dans le frontend actuel ne permet de savoir quel est le poste de l'agent connecte -- il n'existe aucune page de login, LoginResponse ne renvoie que role/nom (pas de posteId), et le JWT ne porte que matricule+role. Decision : ajouter un petit endpoint self-service GET /api/v1/agents/moi (module iam, tous roles authentifies) qui reutilise AgentResponse.of deja existant (contient posteId/posteNom). C'est le prerequis minimal pour satisfaire le critere sur le poste de l'agent connecte, sans enrichir le JWT ni ajouter une dependance de decodage JWT cote front (absente de package.json). C'est un leger debordement du perimetre reporting vers iam, signale explicitement plus bas comme decision et comme risque a faire valider par le spec-writer.
+
+## Fichiers/modules impactes
+
+Backend -- nouveau code dans backend/src/main/java/sn/samapiece/reporting/ (package-info.java deja present) :
+- StatistiquesPosteResponse.java -- record : posteId, posteNom, nombrePiecesEnAttente (long), ancienneteMoyenneJours (Double, nullable si 0 piece), ancienneteMaxJours (Long, nullable si 0 piece), seuilAncienneteJours (int), nombrePiecesDepassantSeuil (long).
+- StockPosteAgrege.java -- interface de projection Spring Data (getNombrePieces, getAncienneteMoyenneJours, getAncienneteMaxJours) pour mapper le resultat de la requete native.
+- StatistiquesProperties.java -- @ConfigurationProperties(prefix = "samapiece.reporting"), champ seuilAncienneteJours (int, defaut 180) ; suit le pattern deja etabli par JwtProperties/PhotoMinioProperties.
+- StatistiquesPosteService.java -- resout l'appelant courant (meme pattern que PieceService.appelantCourant : SecurityContextHolder + AgentRepository.findByMatricule, agent doit etre actif), charge le Poste cible (404 via PosteIntrouvableException si absent), verifie PerimetrePoste.estDansPerimetre(appelant, poste) (403 via AccesRefuseException sinon), appelle la projection d'agregat + une seconde requete de comptage pour nombrePiecesDepassantSeuil, construit la reponse.
+- web/StatistiquesController.java -- GET /api/v1/statistiques/poste/{id}.
+
+Backend -- fichiers modifies :
+- backend/src/main/java/sn/samapiece/enregistrement/PieceRepository.java -- nouvelle methode @Query(nativeQuery = true) calculant l'agregat (COUNT/AVG/MAX) filtre par poste_id et statut IN ('DISPONIBLE','RECLAMEE'), plus une methode de comptage pour le seuil (COUNT(*) WHERE poste_id = ? AND statut IN (...) AND CURRENT_DATE - date_depot > ?).
+- backend/src/main/java/sn/samapiece/iam/web/AgentAdminController.java (ou nouveau AgentSelfController.java dans le meme package, a trancher par le spec-writer) -- ajout de GET /api/v1/agents/moi, sans restriction de role (tout agent authentifie et actif peut lire son propre profil), reutilisant AgentResponse.of et le meme pattern de resolution d'appelant que PieceService.appelantCourant.
+- backend/src/main/resources/application.yml -- nouvelle section samapiece.reporting.seuil-anciennete-jours avec valeur par defaut 180.
+
+Pas de nouvelle migration Flyway : aucune nouvelle table/colonne, calcul entierement a la volee depuis piece, coherent avec le positionnement du ticket dans PROJET-SAMAPIECE.md paragraphe 7.4 (statistiques par poste).
+
+Frontend -- nouveau module frontend/src/features/dashboard/ :
+- types.ts -- miroir TS de StatistiquesPosteResponse.
+- dashboardApi.ts -- getStatistiquesPoste(posteId), meme pattern que piecesApi.ts (fetch + en-tete d'autorisation duplique, pas de client HTTP partage dans ce repo).
+- DashboardPage.tsx -- au montage, appelle GET /api/v1/agents/moi pour recuperer posteId, puis GET /api/v1/statistiques/poste/{posteId} ; affiche compteur, anciennete moyenne/max, et un badge visuel si nombrePiecesDepassantSeuil > 0 ou si ancienneteMaxJours > seuilAncienneteJours.
+
+Frontend -- fichiers modifies :
+- frontend/src/app/App.tsx -- nouvel onglet (ex. Tableau de bord) ajoute au type Onglet et au useState, meme pattern que les onglets existants (pas de router).
+- Emplacement de l'appel /api/v1/agents/moi (nouveau petit module features/agent-courant/ ou inclus directement dans dashboardApi.ts) -- aucune convention profil courant n'existe encore cote front, a trancher par le spec-writer.
+
+Tests :
+- Nouveau backend/src/test/java/sn/samapiece/reporting/StatistiquesPosteIntegrationTest.java (SpringBootTest + MockMvc + Testcontainers, meme structure que PieceIntegrationTest.java) : jeu de Piece creees directement via PieceRepository.save avec des dateDepot fixes connues (pas de ReflectionTestUtils necessaire ici puisque dateDepot est un parametre du constructeur), verification des valeurs de moyenne/max calculees dynamiquement dans l'assertion (voir Risques), verification RBAC (AGENT/CHEF_POSTE du poste -> 200, agent d'un autre poste -> 403, ADMIN_REGIONAL meme region -> 200, hors region -> 403). Ne pas oublier de vider piece_sequence avant Poste dans le nettoyage BeforeEach si des Piece sont creees, et getContentAsString(StandardCharsets.UTF_8) pour tout contenu texte accentue.
+- Test complementaire pour GET /api/v1/agents/moi (nouveau, module iam) : un AGENT authentifie recoit son propre posteId/posteNom.
+
+## Decisions cles
+
+1. Module sn.samapiece.reporting (placeholder deja reserve depuis #1) plutot qu'un nouveau module statistiques ou une extension de enregistrement/referentiel -- respecte le decoupage deja pense par l'equipe et visible dans le code (package-info.java deja present et vide).
+2. Agregation en base via requete SQL native (COUNT/AVG/MAX sur CURRENT_DATE - date_depot) plutot que chargement de toutes les Piece en memoire pour agregation cote Java. Premiere requete agregee du repo, mais evite un scan et une agregation applicative qui ne passeraient pas a l'echelle si un poste accumule des milliers de fiches. JPQL ecarte car l'arithmetique de dates portable n'est pas standardisee en JPQL, alors que le projet est deja mono-SGBD PostgreSQL.
+3. Pieces en attente = statuts DISPONIBLE + RECLAMEE, exactement les statuts sources valides pour Piece.retirer/Piece.signaler deja presents sur main. Pas de reference au concept statuts actifs du ticket #15 (non merge) -- deduit independamment du code deja en place.
+4. RBAC : reutilisation directe de PerimetrePoste.estDansPerimetre(appelant, poste). AGENT/CHEF_POSTE limites a leur propre poste, ADMIN_REGIONAL/ADMIN_NATIONAL elargis a la region/nation (comme debloquer dans PieceService). AUDITEUR n'est couvert par aucune branche du switch de PerimetrePoste (retourne false par defaut) et recoit donc 403 systematiquement. Le ticket ne mentionne pas explicitement AUDITEUR ; decision assumee de ne pas etendre PerimetrePoste dans ce ticket (composant partage avec #24 deja merge, modification a ne pas faire sans certitude du besoin) -- signale comme point ouvert ci-dessous.
+5. Seuil d'anciennete configurable via propriete Spring (samapiece.reporting.seuil-anciennete-jours, defaut 180 soit 6 mois) et non via parametre de requete HTTP -- coherent avec un seuil de conservation defini au niveau organisation (7.4), pas un filtre ad hoc par agent. Expose dans la reponse (seuilAncienneteJours + nombrePiecesDepassantSeuil) pour que le frontend affiche l'alerte sans dupliquer/deviner la valeur par defaut cote client.
+6. Ajout de GET /api/v1/agents/moi (module iam) comme prerequis minimal pour que le frontend sache quel poste interroger. Alternative ecartee : claim posteId dans le JWT (touche JwtService/AuthService et leurs tests #7, et necessiterait une librairie de decodage JWT cote front, absente de package.json). Alternative ecartee aussi : forcer l'agent a saisir manuellement un identifiant de poste (contraire au critere pour le poste de l'agent connecte).
+7. Valeurs nulles quand 0 piece en attente : AVG/MAX SQL renvoient NULL sur 0 ligne -- la reponse expose ancienneteMoyenneJours/ancienneteMaxJours a null (pas 0), pour ne pas laisser croire a une anciennete de 0 jour ; le frontend affiche un etat aucune piece en attente dans ce cas plutot qu'un chiffre trompeur.
+8. nombrePiecesDepassantSeuil calcule via une seconde requete COUNT dediee (condition sur l'anciennete individuelle) plutot que derive mathematiquement de la moyenne/max (impossible a deduire correctement de ces deux seules valeurs) -- deux requetes legeres sur piece plutot qu'une requete unique plus complexe, au benefice de la lisibilite.
+
+## Risques / points d'attention
+
+- Performance de l'agregation SQL a l'echelle : piece a des index simples sur poste_id (idx_piece_poste_id) et sur statut (idx_piece_statut, voir V4__create_piece.sql) mais aucun index compose (poste_id, statut). Pour un poste avec un tres grand volume de fiches, PostgreSQL devra probablement combiner les deux index (bitmap scan) plutot que d'utiliser un index compose ideal -- acceptable au volume actuel, mais a surveiller/ajouter en migration future si necessaire (hors perimetre strict de ce ticket).
+- Fiabilite des tests avec des dates : ne jamais coder en dur un nombre de jours attendu si l'assertion depend de LocalDate.now() au moment de l'execution du test (flaky selon le jour d'execution CI). Prevoir des dateDepot fixes et calculer l'anciennete attendue dynamiquement dans l'assertion via ChronoUnit.DAYS.between(dateFixe, LocalDate.now()) plutot qu'une valeur figee. PieceService/StatistiquesPosteService n'utilisent pas de Clock injectable aujourd'hui (contrairement a JwtService, qui en a un pour ses propres besoins de test) -- a evaluer si le spec-writer souhaite introduire un Clock pour figer aujourd'hui en test, ou se contenter du calcul dynamique en assertion (plus simple, suffisant ici car aucune methode metier ne depend d'une horloge injectee).
+- Perimetre elargi vers le module iam : l'ajout de GET /api/v1/agents/moi deborde du module reporting annonce par le ticket. Ce n'est pas explicitement demande par l'enonce -- a valider par le spec-writer plutot qu'assume silencieusement comme faisant partie du dashboard.
+- AUDITEUR exclu par defaut de l'endpoint (via PerimetrePoste) : si l'intention metier est de laisser un auditeur consulter le stock de n'importe quel poste (coherent avec son role de lecture seule transverse, 7.6), PerimetrePoste devra etre etendu avec une nouvelle branche -- non fait ici pour ne pas modifier silencieusement un composant partage avec le workflow de retrait deja merge (#24) sans confirmation du besoin.
+- Mode hors-ligne/PWA (7.6/16) : la branche #16 (mode hors-ligne) n'est pas mergee sur main et aucune infrastructure service worker/IndexedDB n'existe sur cette branche. Le tableau de bord necessite donc une connexion active a chaque affichage ; aucune mise en cache/synchronisation differee n'est prevue par ce ticket -- a documenter explicitement comme non couvert plutot que laisse implicite.
+- Minimisation des donnees personnelles (10.2) : la reponse de /api/v1/statistiques/poste/{id} n'expose que des agregats (compteurs, jours), aucune donnee nominative de titulaire -- conforme. Le nouvel endpoint /api/v1/agents/moi n'expose que le profil de l'appelant lui-meme (pas de tiers), donc pas de risque de fuite supplementaire.
+
+## Points ouverts pour le spec-writer
+
+- Faut-il etendre PerimetrePoste pour couvrir AUDITEUR (acces lecture seule national) ou confirmer le 403 par defaut retenu ici.
+- Emplacement exact de GET /api/v1/agents/moi : nouveau controleur dedie (AgentSelfController) ou methode ajoutee a AgentAdminController malgre son PreAuthorize restrictif actuel sur les autres methodes.
+- Faut-il introduire un Clock injectable pour StatistiquesPosteService/PieceService afin de figer le temps en test, ou se contenter d'assertions calculees dynamiquement avec LocalDate.now().
+- Choix final de nommage/emplacement du module frontend gerant le profil de l'agent connecte (nouveau features/agent-courant/ partage, ou logique dupliquee directement dans dashboardApi.ts).
+
+## Hors perimetre
+
+- Statistiques globales ou comparatif inter-postes ou inter-regions, taux de restitution, delai moyen, repartition par type de document, export CSV/PDF (perimetre plus large du paragraphe 7.4) : seule la vue stock courant par poste demandee par les criteres d'acceptation de ce ticket est traitee.
+- Toute action serveur de declenchement d'archivage/destruction sur depassement de seuil -- seule une alerte visuelle en lecture est demandee.
+- Parametrage du seuil par requete HTTP ou par poste individuellement -- un seul seuil global via configuration Spring pour ce ticket.
+- Page de login/gestion de session frontend complete -- hors perimetre ; seul un endpoint self minimal (/api/v1/agents/moi) est ajoute pour debloquer le critere sur le poste de l'agent connecte, en supposant qu'un accessToken valide est deja present dans localStorage (comme le font deja les tests existants).
+- Mode hors-ligne/PWA pour cette vue (depend de #16, non mergee).
+- Extension de PerimetrePoste pour couvrir explicitement le role AUDITEUR.
+- Toute modification du modele de donnees Piece ou nouvelle migration Flyway.
