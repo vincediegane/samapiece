@@ -97,6 +97,9 @@ public class Piece {
     @Column(name = "motif_deblocage")
     private String motifDeblocage;
 
+    @Column(name = "cree_malgre_doublon", nullable = false)
+    private boolean creeMalgreDoublon;
+
     protected Piece() {
     }
 
@@ -114,6 +117,26 @@ public class Piece {
             LocalDate dateDepot,
             String etatDocument,
             String remarques) {
+        this(numeroFiche, poste, agentCreateur, typeDocument, nomTitulaire, prenomTitulaire,
+                numeroDocumentHash, numeroDocumentSel, numeroDocumentMasque, dateNaissanceTitulaire,
+                dateDepot, etatDocument, remarques, false);
+    }
+
+    public Piece(
+            String numeroFiche,
+            Poste poste,
+            Agent agentCreateur,
+            TypeDocument typeDocument,
+            String nomTitulaire,
+            String prenomTitulaire,
+            String numeroDocumentHash,
+            String numeroDocumentSel,
+            String numeroDocumentMasque,
+            LocalDate dateNaissanceTitulaire,
+            LocalDate dateDepot,
+            String etatDocument,
+            String remarques,
+            boolean creeMalgreDoublon) {
         this.numeroFiche = numeroFiche;
         this.poste = poste;
         this.agentCreateur = agentCreateur;
@@ -128,6 +151,7 @@ public class Piece {
         this.etatDocument = etatDocument;
         this.statut = StatutPiece.DISPONIBLE;
         this.remarques = remarques;
+        this.creeMalgreDoublon = creeMalgreDoublon;
     }
 
     public UUID getId() {
@@ -220,6 +244,10 @@ public class Piece {
 
     public String getMotifDeblocage() {
         return motifDeblocage;
+    }
+
+    public boolean isCreeMalgreDoublon() {
+        return creeMalgreDoublon;
     }
 
     public void retirer() {
