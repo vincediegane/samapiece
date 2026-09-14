@@ -5,6 +5,7 @@ import io.github.bucket4j.distributed.proxy.ProxyManager;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.actuate.autoconfigure.security.servlet.EndpointRequest;
 import org.springframework.boot.actuate.health.HealthEndpoint;
+import org.springframework.boot.actuate.info.InfoEndpoint;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Lazy;
@@ -67,7 +68,7 @@ public class SecurityConfig {
             .exceptionHandling(exceptions ->
                     exceptions.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
             .authorizeHttpRequests(authorize -> authorize
-                    .requestMatchers(EndpointRequest.to(HealthEndpoint.class)).permitAll()
+                    .requestMatchers(EndpointRequest.to(HealthEndpoint.class, InfoEndpoint.class)).permitAll()
                     .requestMatchers(HttpMethod.GET, "/api/v1/postes").permitAll()
                     .requestMatchers(HttpMethod.POST, "/api/v1/recherche-publique").permitAll()
                     .requestMatchers(HttpMethod.GET, "/api/v1/recherche-publique/captcha").permitAll()
