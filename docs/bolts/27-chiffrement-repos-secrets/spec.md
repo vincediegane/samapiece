@@ -42,6 +42,8 @@ Ces trois entrées correspondent aux fixtures déjà identifiées par l'audit (`
 
 ### `.github/workflows/secrets-scan.yml`
 
+**Correction post-revue (bolt-reviewer, voir `review.md` Finding 1) :** le contrat technique initial ci-dessous affirmait que `fetch-depth: 0` suffit à faire scanner l'historique complet par `gitleaks/gitleaks-action@v2`. C'est faux — vérifié empiriquement en CI réelle (run GitHub Actions 34835141977) : cette action calcule sa propre plage de scan à partir du contexte `push`/`pull_request` (`base..head`), indépendamment de `fetch-depth`, qui ne conditionne que la disponibilité des commits pour le `checkout`, pas la plage effectivement analysée. Le contrat technique retenu est donc un **workflow à deux jobs complémentaires** :
+
 Workflow séparé de `backend.yml`/`frontend.yml` (pas de filtre `paths`, puisqu'un secret peut apparaître dans n'importe quel fichier) :
 
 ```yaml
@@ -52,9 +54,28 @@ on:
     branches:
       - '**'
   pull_request:
+  schedule:
+    - cron: '0 3 * * 1'
+  workflow_dispatch:
 
 jobs:
-  gitleaks:
+  gitleaks-diff:
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Scan des secrets (gitleaks, commits introduits par ce push/PR)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_CONFIG: .gitleaks.toml
+
+  gitleaks-full-history:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout (historique complet)
@@ -62,24 +83,17 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Scan des secrets (gitleaks)
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITLEAKS_CONFIG: .gitleaks.toml
-```
-
-- `fetch-depth: 0` : obligatoire pour que gitleaks scanne tout l'historique et pas seulement le commit du push/de la PR.
-- `gitleaks/gitleaks-action@v2` : action officielle du projet gitleaks. Gratuite pour un dépôt personnel/public ; nécessite un secret `GITLEAKS_LICENSE` si le dépôt appartient à une organisation GitHub (cf. tâche de vérification ci-dessus).
-- **Mode bloquant dès la livraison** : ne pas mettre `continue-on-error: true`. Le codeur ayant accès à `Bash`/Docker pour exécuter gitleaks localement sur l'historique complet avant de committer `.gitleaks.toml`, il doit valider l'absence de faux positif (0 finding après allowlist) avant de pousser — dans ce cas, rien ne justifie de livrer le workflow en mode dégradé. Le workflow est donc livré directement bloquant.
-- **Alternative sans action marketplace (si licence requise et non disponible)** : remplacer le step `gitleaks/gitleaks-action@v2` par un run Docker direct de l'image officielle, qui ne nécessite aucune licence :
-  ```yaml
-      - name: Scan des secrets (gitleaks, image Docker officielle)
+      - name: Scan des secrets (gitleaks, image Docker officielle, historique complet)
         run: |
           docker run --rm -v "$GITHUB_WORKSPACE:/repo" zricethezav/gitleaks:latest \
-            detect --source /repo --log-opts="--all" --config /repo/.gitleaks.toml --redact --exit-code 1
-  ```
-  N'utiliser cette variante que si la vérification du type de compte (tâche dédiée ci-dessus) montre qu'une licence serait nécessaire.
+            detect --source /repo --log-opts="--all" --config /repo/.gitleaks.toml --redact --exit-code 1 -v
+```
+
+- **`gitleaks-diff`** (sur chaque `push`/`pull_request`) : scanne uniquement les commits introduits par cet événement (portée réelle de `gitleaks-action@v2`, indépendante de `fetch-depth`) — détection rapide et immédiate d'un secret nouvellement introduit.
+- **`gitleaks-full-history`** (planifié chaque lundi via `schedule:`, plus `workflow_dispatch` pour un déclenchement manuel) : rescanne réellement tout l'historique (`--log-opts="--all"`) via l'image Docker officielle, qui ne dépend pas du contexte push/PR — c'est ce job, et lui seul, qui garantit une couverture historique complète en continu.
+- `gitleaks/gitleaks-action@v2` : action officielle du projet gitleaks, utilisée pour le job diff. Gratuite pour un dépôt personnel/public ; nécessite un secret `GITLEAKS_LICENSE` si le dépôt appartient à une organisation GitHub (cf. tâche de vérification ci-dessus).
+- **Mode bloquant** : aucun des deux jobs n'a `continue-on-error: true`. Le codeur ayant accès à `Bash`/Docker pour exécuter gitleaks localement sur l'historique complet avant de committer `.gitleaks.toml`, il doit valider l'absence de faux positif (0 finding après allowlist) avant de pousser.
+- L'alternative Docker (`zricethezav/gitleaks:latest`, sans licence requise) sert ici de job de couverture historique complète, et non plus seulement de repli en cas de licence manquante pour `gitleaks-action@v2` — les deux usages sont compatibles et cohabitent dans le même workflow.
 
 ### `docs/securite/gestion-secrets-et-revue-historique.md` — plan de sections
 
@@ -121,7 +135,7 @@ jobs:
 Pas de suite de tests automatisés classique pertinente ici (nature documentaire/outillage). Le codeur doit valider lui-même son travail avant de conclure :
 
 1. **Gitleaks — 0 faux positif avant mode bloquant** : exécuter localement (ou en environnement CI-like) `gitleaks detect --source . --log-opts="--all" --config .gitleaks.toml -v` (ou équivalent Docker) sur l'historique complet, après création de `.gitleaks.toml`, et confirmer 0 finding. Conserver la sortie de ce run comme preuve (dans la description de la PR par exemple).
-2. **Workflow CI réellement vert** : après push de la branche et ouverture/mise à jour de la PR, `gh run list --workflow=secrets-scan.yml --branch <nom-de-branche>` doit montrer un run en succès ; `gh run view <run-id> --log` pour confirmer que le scan a bien porté sur l'historique complet (pas seulement le diff) et s'est terminé sans finding non-allowlisté.
+2. **Workflow CI réellement vert** : après push de la branche et ouverture/mise à jour de la PR, `gh run list --workflow=secrets-scan.yml --branch <nom-de-branche>` doit montrer un run en succès pour le job `gitleaks-diff` (portée réelle : commits du push/de la PR uniquement, pas l'historique complet — cf. Finding 1 de `review.md`) ; déclencher en plus manuellement le job `gitleaks-full-history` (`gh workflow run secrets-scan.yml`) et vérifier via `gh run view <run-id> --log` qu'il a bien scanné tout l'historique (ex. « N commits scanned » avec N proche du nombre total de commits du dépôt) sans finding non-allowlisté.
 3. **Cohérence des trois documents `docs/securite/*.md`** : relecture croisée pour vérifier qu'ils utilisent un ton homogène de "procédure à exécuter plus tard" (pas de fausse assurance de conformité), qu'ils se référencent mutuellement là où pertinent (ex. `chiffrement-au-repos.md` et `tls-flux-externes.md` renvoient vers `gestion-secrets-et-revue-historique.md` pour le garde-fou CI), et qu'aucun des trois ne prétend qu'un critère est déjà satisfait alors qu'il ne l'est pas.
 4. **Reproductibilité de la revue d'historique** : rejouer soi-même, en tant que codeur, les commandes documentées dans `gestion-secrets-et-revue-historique.md` (section 4) et vérifier que le résultat obtenu correspond à ce qui est écrit dans la section 5 du même document (même conclusion : aucun secret réel trouvé).
 5. **Aucune régression sur les workflows existants** : `backend.yml` et `frontend.yml` ne sont pas modifiés ; `secrets-scan.yml` est un workflow indépendant qui ne doit pas interférer avec leur déclenchement.
