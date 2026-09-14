@@ -1,15 +1,20 @@
 package sn.samapiece.enregistrement;
 
+import java.util.UUID;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import sn.samapiece.enregistrement.NumeroDocumentHasher.NumeroDocumentHache;
 import sn.samapiece.enregistrement.web.CreerPieceRequest;
+import sn.samapiece.enregistrement.web.DeblocageRequest;
 import sn.samapiece.enregistrement.web.PieceResponse;
+import sn.samapiece.enregistrement.web.RetraitRequest;
+import sn.samapiece.enregistrement.web.SignalerRequest;
 import sn.samapiece.iam.Agent;
 import sn.samapiece.iam.AgentRepository;
 import sn.samapiece.iam.AccesRefuseException;
+import sn.samapiece.iam.security.PerimetrePoste;
 import sn.samapiece.recherche.PieceRechercheDocument;
 import sn.samapiece.referentiel.Poste;
 
@@ -18,6 +23,7 @@ public class PieceService {
 
     private final PieceRepository pieceRepository;
     private final AgentRepository agentRepository;
+    private final RetraitRepository retraitRepository;
     private final PieceNumeroFicheGenerator numeroFicheGenerator;
     private final NumeroDocumentHasher numeroDocumentHasher;
     private final ApplicationEventPublisher eventPublisher;
@@ -25,11 +31,13 @@ public class PieceService {
     public PieceService(
             PieceRepository pieceRepository,
             AgentRepository agentRepository,
+            RetraitRepository retraitRepository,
             PieceNumeroFicheGenerator numeroFicheGenerator,
             NumeroDocumentHasher numeroDocumentHasher,
             ApplicationEventPublisher eventPublisher) {
         this.pieceRepository = pieceRepository;
         this.agentRepository = agentRepository;
+        this.retraitRepository = retraitRepository;
         this.numeroFicheGenerator = numeroFicheGenerator;
         this.numeroDocumentHasher = numeroDocumentHasher;
         this.eventPublisher = eventPublisher;
@@ -80,6 +88,71 @@ public class PieceService {
                 piece.getPoste().getNom()));
 
         return PieceResponse.of(piece);
+    }
+
+    @Transactional
+    public PieceResponse retirer(UUID pieceId, RetraitRequest request) {
+        Agent appelant = appelantCourant();
+        Piece piece = pieceRepository.findById(pieceId)
+                .orElseThrow(() -> new PieceIntrouvableException(pieceId));
+
+        if (!appelant.getPoste().getId().equals(piece.getPoste().getId())) {
+            throw new AccesRefuseException("Poste hors perimetre pour cette piece.");
+        }
+
+        piece.retirer();
+
+        retraitRepository.saveAndFlush(new Retrait(
+                piece, appelant, request.nomReclamant(), request.pieceJustificativePresentee()));
+
+        republierIndexation(piece);
+
+        return PieceResponse.of(piece);
+    }
+
+    @Transactional
+    public PieceResponse signaler(UUID pieceId, SignalerRequest request) {
+        Agent appelant = appelantCourant();
+        Piece piece = pieceRepository.findById(pieceId)
+                .orElseThrow(() -> new PieceIntrouvableException(pieceId));
+
+        if (!appelant.getPoste().getId().equals(piece.getPoste().getId())) {
+            throw new AccesRefuseException("Poste hors perimetre pour cette piece.");
+        }
+
+        piece.signaler(request.statutCible(), request.motif(), appelant);
+
+        republierIndexation(piece);
+
+        return PieceResponse.of(piece);
+    }
+
+    @Transactional
+    public PieceResponse debloquer(UUID pieceId, DeblocageRequest request) {
+        Agent appelant = appelantCourant();
+        Piece piece = pieceRepository.findById(pieceId)
+                .orElseThrow(() -> new PieceIntrouvableException(pieceId));
+
+        if (!PerimetrePoste.estDansPerimetre(appelant, piece.getPoste())) {
+            throw new AccesRefuseException("Poste/region hors perimetre pour cette piece.");
+        }
+
+        piece.debloquer(request.motif(), appelant);
+
+        republierIndexation(piece);
+
+        return PieceResponse.of(piece);
+    }
+
+    private void republierIndexation(Piece piece) {
+        PieceRechercheDocument document = new PieceRechercheDocument(
+                piece.getId(),
+                piece.getTypeDocument().name(),
+                piece.getNomTitulaire(),
+                piece.getPrenomTitulaire(),
+                piece.getPoste().getNom(),
+                piece.getStatut().name());
+        eventPublisher.publishEvent(new PieceIndexableEvent(document));
     }
 
     private Agent appelantCourant() {
