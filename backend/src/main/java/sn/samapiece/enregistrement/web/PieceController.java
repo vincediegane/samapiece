@@ -2,7 +2,9 @@ package sn.samapiece.enregistrement.web;
 
 import jakarta.validation.Valid;
 import java.util.UUID;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -13,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import sn.samapiece.audit.ActionAuditee;
 import sn.samapiece.enregistrement.PieceService;
+import sn.samapiece.enregistrement.PieceService.RecuPdf;
 
 @RestController
 @RequestMapping("/api/v1/pieces")
@@ -52,6 +55,18 @@ public class PieceController {
     public ResponseEntity<PieceResponse> signaler(
             @PathVariable UUID id, @Valid @RequestBody SignalerRequest request) {
         return ResponseEntity.ok(pieceService.signaler(id, request));
+    }
+
+    @GetMapping("/{id}/recu")
+    @PreAuthorize("hasAnyRole('AGENT','CHEF_POSTE')")
+    @ActionAuditee(action = "PIECE_RECU_GENERE", entiteCible = "PIECE")
+    public ResponseEntity<byte[]> genererRecu(@PathVariable UUID id) {
+        RecuPdf recu = pieceService.genererRecu(id);
+        String nomFichier = recu.numeroFiche().replaceAll("[^A-Za-z0-9-]", "_") + ".pdf";
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + nomFichier + "\"")
+                .body(recu.contenu());
     }
 
     @PostMapping("/{id}/debloquer")

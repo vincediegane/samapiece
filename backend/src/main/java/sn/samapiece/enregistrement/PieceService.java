@@ -27,6 +27,7 @@ public class PieceService {
     private final PieceNumeroFicheGenerator numeroFicheGenerator;
     private final NumeroDocumentHasher numeroDocumentHasher;
     private final ApplicationEventPublisher eventPublisher;
+    private final PieceRecuPdfGenerator pieceRecuPdfGenerator;
 
     public PieceService(
             PieceRepository pieceRepository,
@@ -34,13 +35,15 @@ public class PieceService {
             RetraitRepository retraitRepository,
             PieceNumeroFicheGenerator numeroFicheGenerator,
             NumeroDocumentHasher numeroDocumentHasher,
-            ApplicationEventPublisher eventPublisher) {
+            ApplicationEventPublisher eventPublisher,
+            PieceRecuPdfGenerator pieceRecuPdfGenerator) {
         this.pieceRepository = pieceRepository;
         this.agentRepository = agentRepository;
         this.retraitRepository = retraitRepository;
         this.numeroFicheGenerator = numeroFicheGenerator;
         this.numeroDocumentHasher = numeroDocumentHasher;
         this.eventPublisher = eventPublisher;
+        this.pieceRecuPdfGenerator = pieceRecuPdfGenerator;
     }
 
     @Transactional
@@ -138,6 +141,23 @@ public class PieceService {
         republierIndexation(piece);
 
         return PieceResponse.of(piece);
+    }
+
+    @Transactional(readOnly = true)
+    public RecuPdf genererRecu(UUID pieceId) {
+        Agent appelant = appelantCourant();
+        Piece piece = pieceRepository.findById(pieceId)
+                .orElseThrow(() -> new PieceIntrouvableException(pieceId));
+
+        if (!appelant.getPoste().getId().equals(piece.getPoste().getId())) {
+            throw new AccesRefuseException("Poste hors perimetre pour cette piece.");
+        }
+
+        byte[] contenu = pieceRecuPdfGenerator.genererPdf(piece);
+        return new RecuPdf(contenu, piece.getNumeroFiche());
+    }
+
+    public record RecuPdf(byte[] contenu, String numeroFiche) {
     }
 
     @Transactional

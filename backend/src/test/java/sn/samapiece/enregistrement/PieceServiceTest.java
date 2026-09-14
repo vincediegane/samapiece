@@ -41,10 +41,11 @@ class PieceServiceTest {
     private final PieceNumeroFicheGenerator numeroFicheGenerator = mock(PieceNumeroFicheGenerator.class);
     private final NumeroDocumentHasher numeroDocumentHasher = mock(NumeroDocumentHasher.class);
     private final ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
+    private final PieceRecuPdfGenerator pieceRecuPdfGenerator = mock(PieceRecuPdfGenerator.class);
 
     private final PieceService pieceService = new PieceService(
             pieceRepository, agentRepository, retraitRepository, numeroFicheGenerator,
-            numeroDocumentHasher, eventPublisher);
+            numeroDocumentHasher, eventPublisher, pieceRecuPdfGenerator);
 
     @AfterEach
     void nettoyerContexteSecurite() {
@@ -296,5 +297,43 @@ class PieceServiceTest {
 
         assertThatThrownBy(() -> pieceService.debloquer(piece.getId(), request))
                 .isInstanceOf(TransitionStatutInterditeException.class);
+    }
+
+    @Test
+    void genererRecu_commeAgentDuMemePosteNonCreateur_shouldRetournerPdfNonVideAvecNumeroFiche() {
+        Poste poste = poste();
+        Agent agentCreateur = new Agent(poste, "PN-2024-00001", "Ndoye Fatou", Role.AGENT, "$2a$10$hashopaque");
+        Piece piece = pieceExistante(poste, agentCreateur);
+        connecterCommeAppelant(poste);
+        when(pieceRepository.findById(piece.getId())).thenReturn(Optional.of(piece));
+        byte[] pdfSimule = {1, 2, 3};
+        when(pieceRecuPdfGenerator.genererPdf(piece)).thenReturn(pdfSimule);
+
+        PieceService.RecuPdf recu = pieceService.genererRecu(piece.getId());
+
+        assertThat(recu.contenu()).isEqualTo(pdfSimule);
+        assertThat(recu.numeroFiche()).isEqualTo(piece.getNumeroFiche());
+    }
+
+    @Test
+    void genererRecu_commeAgentDunAutrePoste_shouldLeverAccesRefuseException() {
+        Poste posteAppelant = poste();
+        Agent appelant = connecterCommeAppelant(posteAppelant);
+        Piece piece = pieceExistante(autrePoste(), appelant);
+        when(pieceRepository.findById(piece.getId())).thenReturn(Optional.of(piece));
+
+        assertThatThrownBy(() -> pieceService.genererRecu(piece.getId()))
+                .isInstanceOf(AccesRefuseException.class);
+    }
+
+    @Test
+    void genererRecu_avecPieceInexistante_shouldLeverPieceIntrouvableException() {
+        Poste poste = poste();
+        connecterCommeAppelant(poste);
+        UUID idInexistant = UUID.randomUUID();
+        when(pieceRepository.findById(idInexistant)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> pieceService.genererRecu(idInexistant))
+                .isInstanceOf(PieceIntrouvableException.class);
     }
 }
