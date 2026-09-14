@@ -192,6 +192,15 @@ class PieceAuditIntegrationTest {
                 .toList();
     }
 
+    /**
+     * PostgreSQL reformate canoniquement une colonne {@code jsonb} a la lecture (espace apres
+     * chaque ":"), donc une comparaison de sous-chaine brute sur {@link EvenementAudit#getDetails()}
+     * est fragile : on parse le JSON et on lit le champ pour comparer sa valeur, pas sa forme textuelle.
+     */
+    private String champDetails(String detailsJson, String champ) throws Exception {
+        return OBJECT_MAPPER.readTree(detailsJson).get(champ).asText();
+    }
+
     @Test
     void consulter_commeAgentDuPoste_shouldCreerEvenementAuditPieceConsultee() throws Exception {
         Poste poste = creerPoste();
@@ -214,7 +223,7 @@ class PieceAuditIntegrationTest {
         assertThat(evenement.getEntiteCibleId()).isEqualTo(piece.getId());
         assertThat(evenement.getAdresseIp()).isNotNull();
         assertThat(evenement.getHorodatage()).isNotNull();
-        assertThat(evenement.getDetails()).contains("\"resultat\":\"SUCCES\"");
+        assertThat(champDetails(evenement.getDetails(), "resultat")).isEqualTo("SUCCES");
     }
 
     @Test
@@ -232,7 +241,7 @@ class PieceAuditIntegrationTest {
 
         List<EvenementAudit> evenements = evenementsPourAction("PIECE_CONSULTEE");
         assertThat(evenements).hasSize(1);
-        assertThat(evenements.get(0).getDetails()).contains("\"resultat\":\"ECHEC\"");
+        assertThat(champDetails(evenements.get(0).getDetails(), "resultat")).isEqualTo("ECHEC");
     }
 
     @Test
@@ -289,7 +298,7 @@ class PieceAuditIntegrationTest {
         List<EvenementAudit> evenements = evenementsPourAction("PIECE_CREEE");
         assertThat(evenements).hasSize(1);
         assertThat(evenements.get(0).getEntiteCibleId()).isEqualTo(idPiece);
-        assertThat(evenements.get(0).getDetails()).contains("\"resultat\":\"SUCCES\"");
+        assertThat(champDetails(evenements.get(0).getDetails(), "resultat")).isEqualTo("SUCCES");
     }
 
     @Test
@@ -308,7 +317,7 @@ class PieceAuditIntegrationTest {
         List<EvenementAudit> evenements = evenementsPourAction("PIECE_RETIREE");
         assertThat(evenements).hasSize(1);
         assertThat(evenements.get(0).getEntiteCibleId()).isEqualTo(piece.getId());
-        assertThat(evenements.get(0).getDetails()).contains("\"resultat\":\"SUCCES\"");
+        assertThat(champDetails(evenements.get(0).getDetails(), "resultat")).isEqualTo("SUCCES");
     }
 
     @Test
@@ -330,8 +339,8 @@ class PieceAuditIntegrationTest {
         assertThat(evenements).hasSize(1);
         EvenementAudit evenement = evenements.get(0);
         assertThat(evenement.getEntiteCibleId()).isEqualTo(piece.getId());
-        assertThat(evenement.getDetails()).contains("\"resultat\":\"ECHEC\"");
-        assertThat(evenement.getDetails()).contains("\"exception\":\"AccesRefuseException\"");
+        assertThat(champDetails(evenement.getDetails(), "resultat")).isEqualTo("ECHEC");
+        assertThat(champDetails(evenement.getDetails(), "exception")).isEqualTo("AccesRefuseException");
     }
 
     @Test
@@ -350,7 +359,7 @@ class PieceAuditIntegrationTest {
         List<EvenementAudit> evenements = evenementsPourAction("PIECE_SIGNALEE");
         assertThat(evenements).hasSize(1);
         assertThat(evenements.get(0).getEntiteCibleId()).isEqualTo(piece.getId());
-        assertThat(evenements.get(0).getDetails()).contains("\"resultat\":\"SUCCES\"");
+        assertThat(champDetails(evenements.get(0).getDetails(), "resultat")).isEqualTo("SUCCES");
     }
 
     @Test
@@ -369,6 +378,6 @@ class PieceAuditIntegrationTest {
         List<EvenementAudit> evenements = evenementsPourAction("PIECE_DEBLOQUEE");
         assertThat(evenements).hasSize(1);
         assertThat(evenements.get(0).getEntiteCibleId()).isEqualTo(piece.getId());
-        assertThat(evenements.get(0).getDetails()).contains("\"resultat\":\"SUCCES\"");
+        assertThat(champDetails(evenements.get(0).getDetails(), "resultat")).isEqualTo("SUCCES");
     }
 }
