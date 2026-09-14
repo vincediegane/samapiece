@@ -19,7 +19,8 @@ public record PieceResponse(
         String etatDocument,
         String statut,
         String remarques,
-        OffsetDateTime creeLe) {
+        OffsetDateTime creeLe,
+        boolean creeMalgreDoublon) {
 
     public static PieceResponse of(Piece piece) {
         return new PieceResponse(
@@ -36,6 +37,7 @@ public record PieceResponse(
                 piece.getEtatDocument(),
                 piece.getStatut().name(),
                 piece.getRemarques(),
-                piece.getCreeLe());
+                piece.getCreeLe(),
+                piece.isCreeMalgreDoublon());
     }
 }

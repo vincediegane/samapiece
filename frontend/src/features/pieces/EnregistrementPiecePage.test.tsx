@@ -3,6 +3,15 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import EnregistrementPiecePage from './EnregistrementPiecePage';
 import type { PieceResponse } from './types';
+import { mettreEnFile } from '../../shared/offline/fileSynchronisation';
+
+vi.mock('../../shared/offline/fileSynchronisation', () => ({
+  mettreEnFile: vi.fn().mockResolvedValue({}),
+  listerFile: vi.fn().mockResolvedValue([]),
+  reessayerItem: vi.fn(),
+  reessayerTout: vi.fn(),
+  demarrerDeclencheurs: vi.fn(() => () => {}),
+}));
 
 const PIECE_RESPONSE_MOCK: PieceResponse = {
   id: 'id-1',
@@ -174,5 +183,22 @@ describe('EnregistrementPiecePage', () => {
     await utilisateur.click(screen.getByRole('button', { name: 'Enregistrer la pièce' }));
 
     expect(await screen.findByText('Vérifiez les informations saisies.')).toBeInTheDocument();
+  });
+
+  it('en cas d’échec réseau, met la fiche en file et réinitialise le formulaire', async () => {
+    vi.mocked(fetch).mockRejectedValueOnce(new TypeError('Failed to fetch'));
+
+    render(<EnregistrementPiecePage />);
+    const utilisateur = await remplirChampsRequis();
+    await utilisateur.click(screen.getByRole('button', { name: 'Enregistrer la pièce' }));
+
+    await screen.findByText(
+      'Pas de connexion : la fiche a été enregistrée localement, elle sera synchronisée automatiquement.',
+    );
+    expect(mettreEnFile).toHaveBeenCalledWith(
+      expect.objectContaining({ nomTitulaire: 'Diop', prenomTitulaire: 'Awa' }),
+    );
+    expect(screen.getByLabelText('Nom du titulaire')).toHaveValue('');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });

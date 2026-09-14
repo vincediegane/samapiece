@@ -1,5 +1,6 @@
 package sn.samapiece.enregistrement;
 
+import java.util.List;
 import java.util.UUID;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -23,12 +24,16 @@ public class PieceService {
 
     private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(PieceService.class);
 
+    private static final List<StatutPiece> STATUTS_ACTIFS =
+            List.of(StatutPiece.DISPONIBLE, StatutPiece.RECLAMEE, StatutPiece.LITIGE, StatutPiece.SIGNALEE);
+
     private final PieceRepository pieceRepository;
     private final AgentRepository agentRepository;
     private final RetraitRepository retraitRepository;
     private final PieceNumeroFicheGenerator numeroFicheGenerator;
     private final NumeroDocumentHasher numeroDocumentHasher;
     private final ApplicationEventPublisher eventPublisher;
+    private final PieceRecuPdfGenerator pieceRecuPdfGenerator;
 
     public PieceService(
             PieceRepository pieceRepository,
@@ -36,19 +41,25 @@ public class PieceService {
             RetraitRepository retraitRepository,
             PieceNumeroFicheGenerator numeroFicheGenerator,
             NumeroDocumentHasher numeroDocumentHasher,
-            ApplicationEventPublisher eventPublisher) {
+            ApplicationEventPublisher eventPublisher,
+            PieceRecuPdfGenerator pieceRecuPdfGenerator) {
         this.pieceRepository = pieceRepository;
         this.agentRepository = agentRepository;
         this.retraitRepository = retraitRepository;
         this.numeroFicheGenerator = numeroFicheGenerator;
         this.numeroDocumentHasher = numeroDocumentHasher;
         this.eventPublisher = eventPublisher;
+        this.pieceRecuPdfGenerator = pieceRecuPdfGenerator;
     }
 
     @Transactional
     public PieceResponse creer(CreerPieceRequest request) {
         Agent appelant = appelantCourant();
         Poste poste = appelant.getPoste();
+
+        if (!request.confirmerMalgreDoublon()) {
+            detecterDoublon(request.typeDocument(), request.numeroDocument());
+        }
 
         NumeroDocumentHache hache = numeroDocumentHasher.hacher(request.numeroDocument());
         String numeroFiche = numeroFicheGenerator.genererNumeroFiche(poste.getId(), request.dateDepot());
@@ -66,7 +77,8 @@ public class PieceService {
                 request.dateNaissanceTitulaire(),
                 request.dateDepot(),
                 request.etatDocument(),
-                request.remarques());
+                request.remarques(),
+                request.confirmerMalgreDoublon());
 
         pieceRepository.saveAndFlush(piece);
 
@@ -92,6 +104,18 @@ public class PieceService {
                 piece.getPoste().getNom()));
 
         return PieceResponse.of(piece);
+    }
+
+    private void detecterDoublon(TypeDocument typeDocument, String numeroDocumentClair) {
+        List<Piece> candidats = pieceRepository.findByTypeDocumentAndStatutIn(typeDocument, STATUTS_ACTIFS);
+        List<String> numerosFicheCorrespondants = candidats.stream()
+                .filter(candidat -> numeroDocumentHasher.verifier(
+                        numeroDocumentClair, candidat.getNumeroDocumentSel(), candidat.getNumeroDocumentHash()))
+                .map(Piece::getNumeroFiche)
+                .toList();
+        if (!numerosFicheCorrespondants.isEmpty()) {
+            throw new DoublonPotentielException(numerosFicheCorrespondants);
+        }
     }
 
     @Transactional(readOnly = true)
@@ -142,6 +166,23 @@ public class PieceService {
         republierIndexation(piece);
 
         return PieceResponse.of(piece);
+    }
+
+    @Transactional(readOnly = true)
+    public RecuPdf genererRecu(UUID pieceId) {
+        Agent appelant = appelantCourant();
+        Piece piece = pieceRepository.findById(pieceId)
+                .orElseThrow(() -> new PieceIntrouvableException(pieceId));
+
+        if (!appelant.getPoste().getId().equals(piece.getPoste().getId())) {
+            throw new AccesRefuseException("Poste hors perimetre pour cette piece.");
+        }
+
+        byte[] contenu = pieceRecuPdfGenerator.genererPdf(piece);
+        return new RecuPdf(contenu, piece.getNumeroFiche());
+    }
+
+    public record RecuPdf(byte[] contenu, String numeroFiche) {
     }
 
     @Transactional
