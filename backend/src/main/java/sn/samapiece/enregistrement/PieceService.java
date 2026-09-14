@@ -90,6 +90,19 @@ public class PieceService {
         return PieceResponse.of(piece);
     }
 
+    @Transactional(readOnly = true)
+    public PieceResponse consulter(UUID pieceId) {
+        Agent appelant = appelantCourant();
+        Piece piece = pieceRepository.findById(pieceId)
+                .orElseThrow(() -> new PieceIntrouvableException(pieceId));
+
+        if (!appelant.getPoste().getId().equals(piece.getPoste().getId())) {
+            throw new AccesRefuseException("Poste hors perimetre pour cette piece.");
+        }
+
+        return PieceResponse.of(piece);
+    }
+
     @Transactional
     public PieceResponse retirer(UUID pieceId, RetraitRequest request) {
         Agent appelant = appelantCourant();
