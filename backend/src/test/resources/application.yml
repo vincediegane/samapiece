@@ -1,3 +1,8 @@
+management:
+  health:
+    redis:
+      enabled: false
+
 samapiece:
   jwt:
     secret: test-secret-uniquement-pour-les-tests-automatises-ne-jamais-reutiliser
