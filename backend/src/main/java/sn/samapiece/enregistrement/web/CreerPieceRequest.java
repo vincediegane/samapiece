@@ -13,5 +13,6 @@ public record CreerPieceRequest(
         LocalDate dateNaissanceTitulaire,
         @NotNull LocalDate dateDepot,
         String etatDocument,
-        String remarques) {
+        String remarques,
+        boolean confirmerMalgreDoublon) {
 }
