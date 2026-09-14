@@ -33,6 +33,10 @@ samapiece:
     secret: ${JWT_SECRET}
   photo:
     cle-chiffrement: ${PHOTO_CLE_CHIFFREMENT}
+  alerte:
+    cle-chiffrement: ${ALERTE_CLE_CHIFFREMENT}
+    token-expiration-heures: ${ALERTE_TOKEN_EXPIRATION_HEURES:8760}
+    lien-desinscription-base-url: ${ALERTE_LIEN_DESINSCRIPTION_BASE_URL:https://www.samapiece.sn/desinscription-alerte}
   sms:
     api-endpoint: ${SMS_API_ENDPOINT}
     api-key: ${SMS_API_KEY}

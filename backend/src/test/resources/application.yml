@@ -13,6 +13,10 @@ samapiece:
     bucket-photos: samapiece-photos-test
   photo:
     cle-chiffrement: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+  alerte:
+    cle-chiffrement: BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=
+    token-expiration-heures: 8760
+    lien-desinscription-base-url: http://localhost/desinscription-alerte
   meilisearch:
     host: http://localhost:7700
     api-key: test-master-key
