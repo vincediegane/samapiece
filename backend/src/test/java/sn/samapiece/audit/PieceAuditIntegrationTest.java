@@ -3,6 +3,7 @@ package sn.samapiece.audit;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -12,6 +13,9 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
+import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.text.PDFTextStripper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -276,6 +280,100 @@ class PieceAuditIntegrationTest {
         String token = creerEtLoginToken("PN-2024-00709", Role.AUDITEUR, poste);
 
         mockMvc.perform(get("/api/v1/pieces/" + piece.getId())
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void genererRecu_commeAgentDuMemePosteNonCreateur_shouldRetournerPdfEtCreerEvenementAuditSucces()
+            throws Exception {
+        Poste poste = creerPoste();
+        Agent agentCreateur = creerAgentActif(poste, "PN-2024-00750", Role.AGENT);
+        Piece piece = creerPieceEnBase(poste, agentCreateur, StatutPiece.DISPONIBLE);
+        String token = creerEtLoginToken("PN-2024-00751", Role.AGENT, poste);
+
+        byte[] pdf = mockMvc.perform(get("/api/v1/pieces/" + piece.getId() + "/recu")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Content-Type", org.hamcrest.Matchers.startsWith("application/pdf")))
+                .andExpect(header().string("Content-Disposition", org.hamcrest.Matchers.containsString("inline")))
+                .andExpect(header().string(
+                        "Content-Disposition",
+                        org.hamcrest.Matchers.containsString(
+                                piece.getNumeroFiche().replaceAll("[^A-Za-z0-9-]", "_"))))
+                .andReturn()
+                .getResponse()
+                .getContentAsByteArray();
+
+        assertThat(pdf).isNotEmpty();
+        String texte;
+        try (PDDocument document = Loader.loadPDF(pdf)) {
+            texte = new PDFTextStripper().getText(document);
+        }
+        assertThat(texte).contains(piece.getNumeroFiche());
+        assertThat(texte).doesNotContain(piece.getNomTitulaire());
+        assertThat(texte).doesNotContain(piece.getPrenomTitulaire());
+
+        List<EvenementAudit> evenements = evenementsPourAction("PIECE_RECU_GENERE");
+        assertThat(evenements).hasSize(1);
+        EvenementAudit evenement = evenements.get(0);
+        assertThat(evenement.getEntiteCibleId()).isEqualTo(piece.getId());
+        assertThat(champDetails(evenement.getDetails(), "resultat")).isEqualTo("SUCCES");
+    }
+
+    @Test
+    void genererRecu_commeAgentDunAutrePoste_shouldRetourner403EtCreerEvenementAuditEchec() throws Exception {
+        Region region = creerRegion("Dakar");
+        Poste postePiece = creerPoste(region, "Poste 1");
+        Poste autrePoste = creerPoste(region, "Poste 2");
+        Agent agentCreateur = creerAgentActif(postePiece, "PN-2024-00752", Role.AGENT);
+        Piece piece = creerPieceEnBase(postePiece, agentCreateur, StatutPiece.DISPONIBLE);
+        String token = creerEtLoginToken("PN-2024-00753", Role.AGENT, autrePoste);
+
+        mockMvc.perform(get("/api/v1/pieces/" + piece.getId() + "/recu")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden());
+
+        List<EvenementAudit> evenements = evenementsPourAction("PIECE_RECU_GENERE");
+        assertThat(evenements).hasSize(1);
+        EvenementAudit evenement = evenements.get(0);
+        assertThat(evenement.getEntiteCibleId()).isEqualTo(piece.getId());
+        assertThat(champDetails(evenement.getDetails(), "resultat")).isEqualTo("ECHEC");
+        assertThat(champDetails(evenement.getDetails(), "exception")).isEqualTo("AccesRefuseException");
+    }
+
+    @Test
+    void genererRecu_commeAdminRegional_shouldRetourner403() throws Exception {
+        Poste poste = creerPoste();
+        Agent agentCreateur = creerAgentActif(poste, "PN-2024-00754", Role.AGENT);
+        Piece piece = creerPieceEnBase(poste, agentCreateur, StatutPiece.DISPONIBLE);
+        String token = creerEtLoginToken("PN-2024-00755", Role.ADMIN_REGIONAL, poste);
+
+        mockMvc.perform(get("/api/v1/pieces/" + piece.getId() + "/recu")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void genererRecu_commeAdminNational_shouldRetourner403() throws Exception {
+        Poste poste = creerPoste();
+        Agent agentCreateur = creerAgentActif(poste, "PN-2024-00756", Role.AGENT);
+        Piece piece = creerPieceEnBase(poste, agentCreateur, StatutPiece.DISPONIBLE);
+        String token = creerEtLoginToken("PN-2024-00757", Role.ADMIN_NATIONAL, poste);
+
+        mockMvc.perform(get("/api/v1/pieces/" + piece.getId() + "/recu")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void genererRecu_commeAuditeur_shouldRetourner403() throws Exception {
+        Poste poste = creerPoste();
+        Agent agentCreateur = creerAgentActif(poste, "PN-2024-00758", Role.AGENT);
+        Piece piece = creerPieceEnBase(poste, agentCreateur, StatutPiece.DISPONIBLE);
+        String token = creerEtLoginToken("PN-2024-00759", Role.AUDITEUR, poste);
+
+        mockMvc.perform(get("/api/v1/pieces/" + piece.getId() + "/recu")
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isForbidden());
     }
