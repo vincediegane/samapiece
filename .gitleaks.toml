@@ -1,0 +1,10 @@
+title = "SamaPiece — configuration gitleaks"
+
+[extend]
+useDefault = true
+
+# Aucune entrée d'allowlist : le scan local (historique complet + fixtures de
+# backend/src/test/resources/application.yml) n'a produit aucun finding, même
+# sans cette configuration (voir docs/securite/gestion-secrets-et-revue-historique.md,
+# section 4 "Méthode de revue"). Une allowlist ne doit être ajoutée que si un
+# vrai finding est un jour observé, avec une regex par valeur exacte trouvée.
