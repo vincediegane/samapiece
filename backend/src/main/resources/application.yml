@@ -46,3 +46,8 @@ samapiece:
     retry-ttl-30s-ms: 30000
     retry-ttl-2m-ms: 120000
     retry-ttl-10m-ms: 600000
+  alerte-correspondance:
+    max-tentatives: ${ALERTE_CORRESPONDANCE_MAX_TENTATIVES:3}
+    retry-ttl-30s-ms: 30000
+    retry-ttl-2m-ms: 120000
+    retry-ttl-10m-ms: 600000
