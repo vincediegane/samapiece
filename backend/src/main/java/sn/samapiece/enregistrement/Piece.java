@@ -77,6 +77,26 @@ public class Piece {
     @Column(name = "maj_le", nullable = false, insertable = false)
     private OffsetDateTime majLe;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "signale_par_id")
+    private Agent signalePar;
+
+    @Column(name = "signale_le")
+    private OffsetDateTime signaleLe;
+
+    @Column(name = "motif_signalement")
+    private String motifSignalement;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "debloque_par_id")
+    private Agent debloquePar;
+
+    @Column(name = "debloque_le")
+    private OffsetDateTime debloqueLe;
+
+    @Column(name = "motif_deblocage")
+    private String motifDeblocage;
+
     protected Piece() {
     }
 
@@ -176,6 +196,61 @@ public class Piece {
 
     public OffsetDateTime getMajLe() {
         return majLe;
+    }
+
+    public Agent getSignalePar() {
+        return signalePar;
+    }
+
+    public OffsetDateTime getSignaleLe() {
+        return signaleLe;
+    }
+
+    public String getMotifSignalement() {
+        return motifSignalement;
+    }
+
+    public Agent getDebloquePar() {
+        return debloquePar;
+    }
+
+    public OffsetDateTime getDebloqueLe() {
+        return debloqueLe;
+    }
+
+    public String getMotifDeblocage() {
+        return motifDeblocage;
+    }
+
+    public void retirer() {
+        if (statut != StatutPiece.DISPONIBLE && statut != StatutPiece.RECLAMEE) {
+            throw new TransitionStatutInterditeException(id, statut, "retrait");
+        }
+        this.statut = StatutPiece.RETIREE;
+    }
+
+    public void signaler(StatutPiece statutCible, String motif, Agent signalePar) {
+        if (statutCible != StatutPiece.LITIGE && statutCible != StatutPiece.SIGNALEE) {
+            throw new IllegalArgumentException("statutCible doit etre LITIGE ou SIGNALEE.");
+        }
+        if (statut != StatutPiece.DISPONIBLE && statut != StatutPiece.RECLAMEE) {
+            throw new TransitionStatutInterditeException(id, statut, "signalement");
+        }
+        this.statut = statutCible;
+        this.signalePar = signalePar;
+        this.signaleLe = OffsetDateTime.now();
+        this.motifSignalement = motif;
+    }
+
+    public void debloquer(String motif, Agent debloquePar) {
+        if (statut != StatutPiece.RETIREE && statut != StatutPiece.ARCHIVEE
+                && statut != StatutPiece.LITIGE && statut != StatutPiece.SIGNALEE) {
+            throw new TransitionStatutInterditeException(id, statut, "deblocage");
+        }
+        this.statut = StatutPiece.DISPONIBLE;
+        this.debloquePar = debloquePar;
+        this.debloqueLe = OffsetDateTime.now();
+        this.motifDeblocage = motif;
     }
 
     @Override
