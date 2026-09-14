@@ -8,7 +8,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -19,12 +21,16 @@ import org.springframework.boot.testcontainers.service.connection.ServiceConnect
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import sn.samapiece.enregistrement.Piece;
 import sn.samapiece.enregistrement.PieceRepository;
+import sn.samapiece.enregistrement.Retrait;
+import sn.samapiece.enregistrement.RetraitRepository;
+import sn.samapiece.enregistrement.StatutPiece;
 import sn.samapiece.enregistrement.TypeDocument;
 import sn.samapiece.iam.Agent;
 import sn.samapiece.iam.AgentRepository;
@@ -58,6 +64,9 @@ class PieceIntegrationTest {
     private PieceRepository pieceRepository;
 
     @Autowired
+    private RetraitRepository retraitRepository;
+
+    @Autowired
     private AgentRepository agentRepository;
 
     @Autowired
@@ -74,6 +83,7 @@ class PieceIntegrationTest {
 
     @BeforeEach
     void nettoyer() {
+        retraitRepository.deleteAll();
         pieceRepository.deleteAll();
         // piece_sequence n'est pas exposee par un repository Spring Data (acces exclusif via
         // PieceNumeroFicheGenerator/JdbcTemplate) mais reference poste par FK : a vider avant
@@ -141,6 +151,43 @@ class PieceIntegrationTest {
 
     private String creerPieceJson(LocalDate dateDepot) {
         return creerPieceRequestJson(dateDepot).toString();
+    }
+
+    private Piece creerPieceEnBase(Poste poste, Agent agentCreateur, StatutPiece statut) {
+        Piece piece = new Piece(
+                "PC-" + UUID.randomUUID(),
+                poste,
+                agentCreateur,
+                TypeDocument.CNI,
+                "Diop",
+                "Awa",
+                "hash", "sel", "masque",
+                LocalDate.of(1990, 5, 12),
+                LocalDate.of(2026, 9, 13),
+                "bon état",
+                "trouvée sur la voie publique");
+        ReflectionTestUtils.setField(piece, "statut", statut);
+        return pieceRepository.save(piece);
+    }
+
+    private String retraitRequestJson(String nomReclamant, String pieceJustificativePresentee) {
+        ObjectNode noeud = OBJECT_MAPPER.createObjectNode();
+        noeud.put("nomReclamant", nomReclamant);
+        noeud.put("pieceJustificativePresentee", pieceJustificativePresentee);
+        return noeud.toString();
+    }
+
+    private String signalerRequestJson(String statutCible, String motif) {
+        ObjectNode noeud = OBJECT_MAPPER.createObjectNode();
+        noeud.put("statutCible", statutCible);
+        noeud.put("motif", motif);
+        return noeud.toString();
+    }
+
+    private String deblocageRequestJson(String motif) {
+        ObjectNode noeud = OBJECT_MAPPER.createObjectNode();
+        noeud.put("motif", motif);
+        return noeud.toString();
     }
 
     @Test
@@ -393,5 +440,344 @@ class PieceIntegrationTest {
                         .content(creerPieceJson(LocalDate.of(2026, 9, 13))))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("ACCES_REFUSE"));
+    }
+
+    @Test
+    void retirer_commeAgentDuPosteDeLaPiece_avecPieceDisponible_shouldRetourner200EtPasserRetiree() throws Exception {
+        Poste poste = creerPoste();
+        Agent agentCreateur = creerAgentActif(poste, "PN-2024-00600", Role.AGENT);
+        Piece piece = creerPieceEnBase(poste, agentCreateur, StatutPiece.DISPONIBLE);
+        String token = creerEtLoginToken("PN-2024-00601", Role.AGENT, poste);
+
+        mockMvc.perform(post("/api/v1/pieces/" + piece.getId() + "/retrait")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(retraitRequestJson("Ndiaye Fatou", "Carte d'electeur presentee")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statut").value("RETIREE"));
+
+        Piece pieceMiseAJour = pieceRepository.findById(piece.getId()).orElseThrow();
+        assertThat(pieceMiseAJour.getStatut()).isEqualTo(StatutPiece.RETIREE);
+
+        List<Retrait> retraits = retraitRepository.findByPieceIdOrderByCreeLeDesc(piece.getId());
+        assertThat(retraits).hasSize(1);
+        Retrait retrait = retraits.get(0);
+        assertThat(retrait.getNomReclamant()).isEqualTo("Ndiaye Fatou");
+        assertThat(retrait.getPieceJustificativePresentee()).isEqualTo("Carte d'electeur presentee");
+        Agent agentValidateur = agentRepository.findByMatricule("PN-2024-00601").orElseThrow();
+        assertThat(retrait.getAgentValidateur().getId()).isEqualTo(agentValidateur.getId());
+    }
+
+    @Test
+    void retirer_avecNomReclamantDifferentDuNomTitulaire_shouldRetourner200QuandMemeSansOCR() throws Exception {
+        Poste poste = creerPoste();
+        Agent agentCreateur = creerAgentActif(poste, "PN-2024-00602", Role.AGENT);
+        Piece piece = creerPieceEnBase(poste, agentCreateur, StatutPiece.DISPONIBLE);
+        String token = creerEtLoginToken("PN-2024-00603", Role.AGENT, poste);
+
+        mockMvc.perform(post("/api/v1/pieces/" + piece.getId() + "/retrait")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(retraitRequestJson("Un nom totalement different de Diop Awa", "recu de depot")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statut").value("RETIREE"));
+    }
+
+    @Test
+    void retirer_survienneSurPieceDejaRetiree_shouldRetourner409() throws Exception {
+        Poste poste = creerPoste();
+        Agent agentCreateur = creerAgentActif(poste, "PN-2024-00604", Role.AGENT);
+        Piece piece = creerPieceEnBase(poste, agentCreateur, StatutPiece.RETIREE);
+        String token = creerEtLoginToken("PN-2024-00605", Role.AGENT, poste);
+
+        String reponse = mockMvc.perform(post("/api/v1/pieces/" + piece.getId() + "/retrait")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(retraitRequestJson("Ndiaye Fatou", "Carte d'electeur presentee")))
+                .andExpect(status().isConflict())
+                .andReturn()
+                .getResponse()
+                .getContentAsString(StandardCharsets.UTF_8);
+
+        assertThat(OBJECT_MAPPER.readTree(reponse).get("code").asText()).isEqualTo("TRANSITION_STATUT_INTERDITE");
+    }
+
+    @Test
+    void retirer_survienneSurPieceArchivee_shouldRetourner409() throws Exception {
+        Poste poste = creerPoste();
+        Agent agentCreateur = creerAgentActif(poste, "PN-2024-00606", Role.AGENT);
+        Piece piece = creerPieceEnBase(poste, agentCreateur, StatutPiece.ARCHIVEE);
+        String token = creerEtLoginToken("PN-2024-00607", Role.AGENT, poste);
+
+        mockMvc.perform(post("/api/v1/pieces/" + piece.getId() + "/retrait")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(retraitRequestJson("Ndiaye Fatou", "Carte d'electeur presentee")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("TRANSITION_STATUT_INTERDITE"));
+    }
+
+    @Test
+    void retirer_survienneSurPieceEnLitige_shouldRetourner409() throws Exception {
+        Poste poste = creerPoste();
+        Agent agentCreateur = creerAgentActif(poste, "PN-2024-00608", Role.AGENT);
+        Piece piece = creerPieceEnBase(poste, agentCreateur, StatutPiece.LITIGE);
+        String token = creerEtLoginToken("PN-2024-00609", Role.AGENT, poste);
+
+        mockMvc.perform(post("/api/v1/pieces/" + piece.getId() + "/retrait")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(retraitRequestJson("Ndiaye Fatou", "Carte d'electeur presentee")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("TRANSITION_STATUT_INTERDITE"));
+    }
+
+    @Test
+    void signaler_commeAgentDuPoste_avecStatutCibleLitige_shouldRetourner200EtPasserLitige() throws Exception {
+        Poste poste = creerPoste();
+        Agent agentCreateur = creerAgentActif(poste, "PN-2024-00610", Role.AGENT);
+        Piece piece = creerPieceEnBase(poste, agentCreateur, StatutPiece.DISPONIBLE);
+        String token = creerEtLoginToken("PN-2024-00611", Role.AGENT, poste);
+
+        mockMvc.perform(post("/api/v1/pieces/" + piece.getId() + "/signaler")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(signalerRequestJson("LITIGE", "Deux reclamants pour la meme piece")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statut").value("LITIGE"));
+
+        String reponseRetrait = mockMvc.perform(post("/api/v1/pieces/" + piece.getId() + "/retrait")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(retraitRequestJson("Ndiaye Fatou", "Carte d'electeur presentee")))
+                .andExpect(status().isConflict())
+                .andReturn()
+                .getResponse()
+                .getContentAsString(StandardCharsets.UTF_8);
+
+        assertThat(OBJECT_MAPPER.readTree(reponseRetrait).get("code").asText())
+                .isEqualTo("TRANSITION_STATUT_INTERDITE");
+    }
+
+    @Test
+    void signaler_commeAgentDuPoste_avecStatutCibleSignalee_shouldRetourner200EtPasserSignalee() throws Exception {
+        Poste poste = creerPoste();
+        Agent agentCreateur = creerAgentActif(poste, "PN-2024-00612", Role.AGENT);
+        Piece piece = creerPieceEnBase(poste, agentCreateur, StatutPiece.DISPONIBLE);
+        String token = creerEtLoginToken("PN-2024-00613", Role.AGENT, poste);
+
+        mockMvc.perform(post("/api/v1/pieces/" + piece.getId() + "/signaler")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(signalerRequestJson("SIGNALEE", "Numero de document suspect")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statut").value("SIGNALEE"));
+
+        mockMvc.perform(post("/api/v1/pieces/" + piece.getId() + "/retrait")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(retraitRequestJson("Ndiaye Fatou", "Carte d'electeur presentee")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("TRANSITION_STATUT_INTERDITE"));
+    }
+
+    @Test
+    void signaler_avecStatutCibleInvalide_shouldRetourner400() throws Exception {
+        Poste poste = creerPoste();
+        Agent agentCreateur = creerAgentActif(poste, "PN-2024-00614", Role.AGENT);
+        Piece piece = creerPieceEnBase(poste, agentCreateur, StatutPiece.DISPONIBLE);
+        String token = creerEtLoginToken("PN-2024-00615", Role.AGENT, poste);
+
+        mockMvc.perform(post("/api/v1/pieces/" + piece.getId() + "/signaler")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(signalerRequestJson("DISPONIBLE", "motif quelconque")))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void debloquer_commeChefPoste_survienneSurPieceRetiree_shouldRetourner200PuisPermettreNouveauRetrait()
+            throws Exception {
+        Poste poste = creerPoste();
+        Agent agentCreateur = creerAgentActif(poste, "PN-2024-00616", Role.AGENT);
+        Piece piece = creerPieceEnBase(poste, agentCreateur, StatutPiece.DISPONIBLE);
+        String tokenAgent = creerEtLoginToken("PN-2024-00617", Role.AGENT, poste);
+        String tokenChefPoste = creerEtLoginToken("PN-2024-00618", Role.CHEF_POSTE, poste);
+
+        mockMvc.perform(post("/api/v1/pieces/" + piece.getId() + "/retrait")
+                        .header("Authorization", "Bearer " + tokenAgent)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(retraitRequestJson("Ndiaye Fatou", "Carte d'electeur presentee")))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/v1/pieces/" + piece.getId() + "/debloquer")
+                        .header("Authorization", "Bearer " + tokenChefPoste)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(deblocageRequestJson("Erreur d'identification du reclamant")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statut").value("DISPONIBLE"));
+
+        mockMvc.perform(post("/api/v1/pieces/" + piece.getId() + "/retrait")
+                        .header("Authorization", "Bearer " + tokenAgent)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(retraitRequestJson("Ndiaye Fatou", "Carte d'electeur presentee")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statut").value("RETIREE"));
+    }
+
+    @Test
+    void retirer_commeAdminRegional_shouldRetourner403() throws Exception {
+        Poste poste = creerPoste();
+        Agent agentCreateur = creerAgentActif(poste, "PN-2024-00619", Role.AGENT);
+        Piece piece = creerPieceEnBase(poste, agentCreateur, StatutPiece.DISPONIBLE);
+        String token = creerEtLoginToken("PN-2024-00620", Role.ADMIN_REGIONAL, poste);
+
+        mockMvc.perform(post("/api/v1/pieces/" + piece.getId() + "/retrait")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(retraitRequestJson("Ndiaye Fatou", "Carte d'electeur presentee")))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void signaler_commeAuditeur_shouldRetourner403() throws Exception {
+        Poste poste = creerPoste();
+        Agent agentCreateur = creerAgentActif(poste, "PN-2024-00621", Role.AGENT);
+        Piece piece = creerPieceEnBase(poste, agentCreateur, StatutPiece.DISPONIBLE);
+        String token = creerEtLoginToken("PN-2024-00622", Role.AUDITEUR, poste);
+
+        mockMvc.perform(post("/api/v1/pieces/" + piece.getId() + "/signaler")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(signalerRequestJson("LITIGE", "motif")))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void debloquer_commeAgent_shouldRetourner403() throws Exception {
+        Poste poste = creerPoste();
+        Agent agentCreateur = creerAgentActif(poste, "PN-2024-00623", Role.AGENT);
+        Piece piece = creerPieceEnBase(poste, agentCreateur, StatutPiece.RETIREE);
+        String token = creerEtLoginToken("PN-2024-00624", Role.AGENT, poste);
+
+        mockMvc.perform(post("/api/v1/pieces/" + piece.getId() + "/debloquer")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(deblocageRequestJson("motif")))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void debloquer_commeAdminRegionalHorsRegion_shouldRetourner403() throws Exception {
+        Region regionPiece = creerRegion("Dakar");
+        Poste postePiece = creerPoste(regionPiece, "Commissariat Central Dakar");
+        Agent agentCreateur = creerAgentActif(postePiece, "PN-2024-00625", Role.AGENT);
+        Piece piece = creerPieceEnBase(postePiece, agentCreateur, StatutPiece.RETIREE);
+
+        Poste posteAdmin = creerPoste(creerRegion("Thies"), "Commissariat Thies");
+        String token = creerEtLoginToken("PN-2024-00626", Role.ADMIN_REGIONAL, posteAdmin);
+
+        mockMvc.perform(post("/api/v1/pieces/" + piece.getId() + "/debloquer")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(deblocageRequestJson("motif")))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void debloquer_commeAdminRegionalDeLaMemeRegion_shouldRetourner200() throws Exception {
+        Region region = creerRegion("Dakar");
+        Poste postePiece = creerPoste(region, "Commissariat Central Dakar");
+        Agent agentCreateur = creerAgentActif(postePiece, "PN-2024-00627", Role.AGENT);
+        Piece piece = creerPieceEnBase(postePiece, agentCreateur, StatutPiece.RETIREE);
+
+        Poste posteAdmin = creerPoste(region, "Commissariat Secondaire Dakar");
+        String token = creerEtLoginToken("PN-2024-00628", Role.ADMIN_REGIONAL, posteAdmin);
+
+        mockMvc.perform(post("/api/v1/pieces/" + piece.getId() + "/debloquer")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(deblocageRequestJson("motif")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statut").value("DISPONIBLE"));
+    }
+
+    @Test
+    void retirer_commeAgentDunAutrePoste_shouldRetourner403() throws Exception {
+        Region region = creerRegion("Dakar");
+        Poste postePiece = creerPoste(region, "Poste 1");
+        Poste autrePoste = creerPoste(region, "Poste 2");
+        Agent agentCreateur = creerAgentActif(postePiece, "PN-2024-00629", Role.AGENT);
+        Piece piece = creerPieceEnBase(postePiece, agentCreateur, StatutPiece.DISPONIBLE);
+        String token = creerEtLoginToken("PN-2024-00630", Role.AGENT, autrePoste);
+
+        mockMvc.perform(post("/api/v1/pieces/" + piece.getId() + "/retrait")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(retraitRequestJson("Ndiaye Fatou", "Carte d'electeur presentee")))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void retirer_sansNomReclamant_shouldRetourner400() throws Exception {
+        Poste poste = creerPoste();
+        Agent agentCreateur = creerAgentActif(poste, "PN-2024-00631", Role.AGENT);
+        Piece piece = creerPieceEnBase(poste, agentCreateur, StatutPiece.DISPONIBLE);
+        String token = creerEtLoginToken("PN-2024-00632", Role.AGENT, poste);
+        ObjectNode corps = OBJECT_MAPPER.createObjectNode();
+        corps.put("pieceJustificativePresentee", "Carte d'electeur presentee");
+
+        mockMvc.perform(post("/api/v1/pieces/" + piece.getId() + "/retrait")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(corps.toString()))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void retirer_sansPieceJustificativePresentee_shouldRetourner400() throws Exception {
+        Poste poste = creerPoste();
+        Agent agentCreateur = creerAgentActif(poste, "PN-2024-00633", Role.AGENT);
+        Piece piece = creerPieceEnBase(poste, agentCreateur, StatutPiece.DISPONIBLE);
+        String token = creerEtLoginToken("PN-2024-00634", Role.AGENT, poste);
+        ObjectNode corps = OBJECT_MAPPER.createObjectNode();
+        corps.put("nomReclamant", "Ndiaye Fatou");
+
+        mockMvc.perform(post("/api/v1/pieces/" + piece.getId() + "/retrait")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(corps.toString()))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void signaler_sansMotif_shouldRetourner400() throws Exception {
+        Poste poste = creerPoste();
+        Agent agentCreateur = creerAgentActif(poste, "PN-2024-00635", Role.AGENT);
+        Piece piece = creerPieceEnBase(poste, agentCreateur, StatutPiece.DISPONIBLE);
+        String token = creerEtLoginToken("PN-2024-00636", Role.AGENT, poste);
+        ObjectNode corps = OBJECT_MAPPER.createObjectNode();
+        corps.put("statutCible", "LITIGE");
+
+        mockMvc.perform(post("/api/v1/pieces/" + piece.getId() + "/signaler")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(corps.toString()))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void debloquer_sansMotif_shouldRetourner400() throws Exception {
+        Poste poste = creerPoste();
+        Agent agentCreateur = creerAgentActif(poste, "PN-2024-00637", Role.AGENT);
+        Piece piece = creerPieceEnBase(poste, agentCreateur, StatutPiece.RETIREE);
+        String token = creerEtLoginToken("PN-2024-00638", Role.CHEF_POSTE, poste);
+        ObjectNode corps = OBJECT_MAPPER.createObjectNode();
+
+        mockMvc.perform(post("/api/v1/pieces/" + piece.getId() + "/debloquer")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(corps.toString()))
+                .andExpect(status().isBadRequest());
     }
 }
