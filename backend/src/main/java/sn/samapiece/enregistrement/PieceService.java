@@ -69,6 +69,16 @@ public class PieceService {
                 piece.getStatut().name());
         eventPublisher.publishEvent(new PieceIndexableEvent(document));
 
+        eventPublisher.publishEvent(new PieceDisponibleEvent(
+                piece.getId(),
+                piece.getTypeDocument(),
+                piece.getNomTitulaire(),
+                piece.getPrenomTitulaire(),
+                request.numeroDocument(),
+                piece.getDateNaissanceTitulaire(),
+                piece.getNumeroFiche(),
+                piece.getPoste().getNom()));
+
         return PieceResponse.of(piece);
     }
 

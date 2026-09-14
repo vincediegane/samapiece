@@ -71,6 +71,8 @@ public class SecurityConfig {
                     .requestMatchers(HttpMethod.GET, "/api/v1/postes").permitAll()
                     .requestMatchers(HttpMethod.POST, "/api/v1/recherche-publique").permitAll()
                     .requestMatchers(HttpMethod.GET, "/api/v1/recherche-publique/captcha").permitAll()
+                    .requestMatchers(HttpMethod.POST, "/api/v1/alertes").permitAll()
+                    .requestMatchers(HttpMethod.DELETE, "/api/v1/alertes/*").permitAll()
                     .requestMatchers(HttpMethod.POST, "/api/v1/auth/login", "/api/v1/auth/refresh").permitAll()
                     .anyRequest().authenticated())
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)

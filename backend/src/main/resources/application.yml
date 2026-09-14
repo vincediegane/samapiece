@@ -7,6 +7,11 @@ spring:
     multipart:
       max-file-size: 10MB
       max-request-size: 10MB
+  rabbitmq:
+    host: ${RABBITMQ_HOST}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER}
+    password: ${RABBITMQ_PASSWORD}
 
 server:
   port: ${SERVER_PORT:8080}
@@ -20,6 +25,8 @@ management:
     health:
       show-details: never
   health:
+    rabbit:
+      enabled: false
     redis:
       # Redis n'est utilise que pour le rate limiting/CAPTCHA de la recherche publique (#19), en
       # fail-open explicite : une panne Redis ne doit jamais faire echouer l'application ni son
@@ -33,3 +40,21 @@ samapiece:
     secret: ${JWT_SECRET}
   photo:
     cle-chiffrement: ${PHOTO_CLE_CHIFFREMENT}
+  alerte:
+    cle-chiffrement: ${ALERTE_CLE_CHIFFREMENT}
+    token-expiration-heures: ${ALERTE_TOKEN_EXPIRATION_HEURES:8760}
+    lien-desinscription-base-url: ${ALERTE_LIEN_DESINSCRIPTION_BASE_URL:https://www.samapiece.sn/desinscription-alerte}
+  sms:
+    api-endpoint: ${SMS_API_ENDPOINT}
+    api-key: ${SMS_API_KEY}
+    sender-id: ${SMS_SENDER_ID}
+    timeout-ms: ${SMS_TIMEOUT_MS:5000}
+    max-tentatives: ${SMS_MAX_TENTATIVES:3}
+    retry-ttl-30s-ms: 30000
+    retry-ttl-2m-ms: 120000
+    retry-ttl-10m-ms: 600000
+  alerte-correspondance:
+    max-tentatives: ${ALERTE_CORRESPONDANCE_MAX_TENTATIVES:3}
+    retry-ttl-30s-ms: 30000
+    retry-ttl-2m-ms: 120000
+    retry-ttl-10m-ms: 600000

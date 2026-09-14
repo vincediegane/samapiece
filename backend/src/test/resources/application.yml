@@ -1,5 +1,7 @@
 management:
   health:
+    rabbit:
+      enabled: false
     redis:
       enabled: false
 
@@ -13,7 +15,25 @@ samapiece:
     bucket-photos: samapiece-photos-test
   photo:
     cle-chiffrement: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+  alerte:
+    cle-chiffrement: BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=
+    token-expiration-heures: 8760
+    lien-desinscription-base-url: http://localhost/desinscription-alerte
   meilisearch:
     host: http://localhost:7700
     api-key: test-master-key
     index-pieces: pieces-test
+  sms:
+    api-endpoint: http://127.0.0.1:1
+    api-key: test-api-key
+    sender-id: SamaPiece
+    timeout-ms: 1000
+    max-tentatives: 3
+    retry-ttl-30s-ms: 30000
+    retry-ttl-2m-ms: 120000
+    retry-ttl-10m-ms: 600000
+  alerte-correspondance:
+    max-tentatives: 3
+    retry-ttl-30s-ms: 30000
+    retry-ttl-2m-ms: 120000
+    retry-ttl-10m-ms: 600000
