@@ -10,6 +10,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -26,6 +27,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import sn.samapiece.enregistrement.NumeroDocumentHasher;
+import sn.samapiece.enregistrement.NumeroDocumentHasher.NumeroDocumentHache;
 import sn.samapiece.enregistrement.Piece;
 import sn.samapiece.enregistrement.PieceRepository;
 import sn.samapiece.enregistrement.Retrait;
@@ -153,6 +156,12 @@ class PieceIntegrationTest {
         return creerPieceRequestJson(dateDepot).toString();
     }
 
+    private String creerPieceJson(LocalDate dateDepot, boolean confirmerMalgreDoublon) {
+        ObjectNode noeud = creerPieceRequestJson(dateDepot);
+        noeud.put("confirmerMalgreDoublon", confirmerMalgreDoublon);
+        return noeud.toString();
+    }
+
     private Piece creerPieceEnBase(Poste poste, Agent agentCreateur, StatutPiece statut) {
         Piece piece = new Piece(
                 "PC-" + UUID.randomUUID(),
@@ -162,6 +171,29 @@ class PieceIntegrationTest {
                 "Diop",
                 "Awa",
                 "hash", "sel", "masque",
+                LocalDate.of(1990, 5, 12),
+                LocalDate.of(2026, 9, 13),
+                "bon état",
+                "trouvée sur la voie publique");
+        ReflectionTestUtils.setField(piece, "statut", statut);
+        return pieceRepository.save(piece);
+    }
+
+    private Piece creerPieceEnBaseAvecHashReel(
+            Poste poste,
+            Agent agentCreateur,
+            StatutPiece statut,
+            TypeDocument typeDocument,
+            String numeroDocumentClair) {
+        NumeroDocumentHache hache = new NumeroDocumentHasher().hacher(numeroDocumentClair);
+        Piece piece = new Piece(
+                "PC-" + UUID.randomUUID(),
+                poste,
+                agentCreateur,
+                typeDocument,
+                "Diop",
+                "Awa",
+                hache.hash(), hache.sel(), hache.masque(),
                 LocalDate.of(1990, 5, 12),
                 LocalDate.of(2026, 9, 13),
                 "bon état",
@@ -333,6 +365,7 @@ class PieceIntegrationTest {
                 .andExpect(jsonPath("$.numeroDocumentHash").doesNotExist())
                 .andExpect(jsonPath("$.numeroDocumentSel").doesNotExist())
                 .andExpect(jsonPath("$.numeroDocument").doesNotExist())
+                .andExpect(jsonPath("$.creeMalgreDoublon").value(false))
                 .andReturn()
                 .getResponse()
                 .getContentAsString();
@@ -344,6 +377,148 @@ class PieceIntegrationTest {
         Piece piece = pieceRepository.findById(id).orElseThrow();
         assertThat(piece.getNumeroDocumentHash()).isNotEqualTo(NUMERO_DOCUMENT_CLAIR);
         assertThat(piece.getNumeroDocumentSel()).isNotBlank();
+    }
+
+    @Test
+    void creer_avecNumeroDocumentIdentiqueAUneFicheDisponible_shouldRetourner409AvecNumeroFicheCandidat()
+            throws Exception {
+        Poste poste = creerPoste();
+        Agent agentCreateur = creerAgentActif(poste, "PN-2024-00650", Role.AGENT);
+        Piece pieceExistante = creerPieceEnBaseAvecHashReel(
+                poste, agentCreateur, StatutPiece.DISPONIBLE, TypeDocument.CNI, NUMERO_DOCUMENT_CLAIR);
+        String token = creerEtLoginToken("PN-2024-00651", Role.AGENT, poste);
+
+        String reponse = mockMvc.perform(post("/api/v1/pieces")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(creerPieceJson(LocalDate.of(2026, 9, 13))))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("DOUBLON_POTENTIEL"))
+                .andExpect(jsonPath("$.nomTitulaire").doesNotExist())
+                .andExpect(jsonPath("$.prenomTitulaire").doesNotExist())
+                .andExpect(jsonPath("$.numeroDocumentMasque").doesNotExist())
+                .andReturn()
+                .getResponse()
+                .getContentAsString(StandardCharsets.UTF_8);
+
+        List<String> numerosFicheCandidats = new ArrayList<>();
+        OBJECT_MAPPER.readTree(reponse).get("numerosFicheCandidats")
+                .forEach(n -> numerosFicheCandidats.add(n.asText()));
+        assertThat(numerosFicheCandidats).containsExactly(pieceExistante.getNumeroFiche());
+    }
+
+    @Test
+    void creer_avecConfirmerMalgreDoublonTrue_shouldRetourner201MalgreDoublonDetecte() throws Exception {
+        Poste poste = creerPoste();
+        Agent agentCreateur = creerAgentActif(poste, "PN-2024-00652", Role.AGENT);
+        creerPieceEnBaseAvecHashReel(
+                poste, agentCreateur, StatutPiece.DISPONIBLE, TypeDocument.CNI, NUMERO_DOCUMENT_CLAIR);
+        String token = creerEtLoginToken("PN-2024-00653", Role.AGENT, poste);
+
+        String reponse = mockMvc.perform(post("/api/v1/pieces")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(creerPieceJson(LocalDate.of(2026, 9, 13), true)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.creeMalgreDoublon").value(true))
+                .andReturn()
+                .getResponse()
+                .getContentAsString(StandardCharsets.UTF_8);
+
+        UUID id = UUID.fromString(OBJECT_MAPPER.readTree(reponse).get("id").asText());
+        Piece piece = pieceRepository.findById(id).orElseThrow();
+        assertThat(piece.isCreeMalgreDoublon()).isTrue();
+    }
+
+    @Test
+    void creer_avecPlusieursCandidatsActifsCorrespondants_shouldRetourner409AvecTousLesNumerosFicheCandidats()
+            throws Exception {
+        Poste poste = creerPoste();
+        Agent agentCreateur = creerAgentActif(poste, "PN-2024-00654", Role.AGENT);
+        Piece candidat1 = creerPieceEnBaseAvecHashReel(
+                poste, agentCreateur, StatutPiece.DISPONIBLE, TypeDocument.CNI, NUMERO_DOCUMENT_CLAIR);
+        Piece candidat2 = creerPieceEnBaseAvecHashReel(
+                poste, agentCreateur, StatutPiece.LITIGE, TypeDocument.CNI, NUMERO_DOCUMENT_CLAIR);
+        String token = creerEtLoginToken("PN-2024-00655", Role.AGENT, poste);
+
+        String reponse = mockMvc.perform(post("/api/v1/pieces")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(creerPieceJson(LocalDate.of(2026, 9, 13))))
+                .andExpect(status().isConflict())
+                .andReturn()
+                .getResponse()
+                .getContentAsString(StandardCharsets.UTF_8);
+
+        List<String> numerosFicheCandidats = new ArrayList<>();
+        OBJECT_MAPPER.readTree(reponse).get("numerosFicheCandidats")
+                .forEach(n -> numerosFicheCandidats.add(n.asText()));
+        assertThat(numerosFicheCandidats).containsExactlyInAnyOrder(
+                candidat1.getNumeroFiche(), candidat2.getNumeroFiche());
+    }
+
+    @Test
+    void creer_avecNumeroDocumentIdentiqueMaisStatutRetiree_shouldRetourner201SansDetectionDoublon()
+            throws Exception {
+        Poste poste = creerPoste();
+        Agent agentCreateur = creerAgentActif(poste, "PN-2024-00656", Role.AGENT);
+        creerPieceEnBaseAvecHashReel(
+                poste, agentCreateur, StatutPiece.RETIREE, TypeDocument.CNI, NUMERO_DOCUMENT_CLAIR);
+        String token = creerEtLoginToken("PN-2024-00657", Role.AGENT, poste);
+
+        mockMvc.perform(post("/api/v1/pieces")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(creerPieceJson(LocalDate.of(2026, 9, 13))))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
+    void creer_avecNumeroDocumentIdentiqueMaisStatutArchivee_shouldRetourner201SansDetectionDoublon()
+            throws Exception {
+        Poste poste = creerPoste();
+        Agent agentCreateur = creerAgentActif(poste, "PN-2024-00658", Role.AGENT);
+        creerPieceEnBaseAvecHashReel(
+                poste, agentCreateur, StatutPiece.ARCHIVEE, TypeDocument.CNI, NUMERO_DOCUMENT_CLAIR);
+        String token = creerEtLoginToken("PN-2024-00659", Role.AGENT, poste);
+
+        mockMvc.perform(post("/api/v1/pieces")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(creerPieceJson(LocalDate.of(2026, 9, 13))))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
+    void creer_avecNumeroDocumentIdentiqueMaisStatutDetruite_shouldRetourner201SansDetectionDoublon()
+            throws Exception {
+        Poste poste = creerPoste();
+        Agent agentCreateur = creerAgentActif(poste, "PN-2024-00660", Role.AGENT);
+        creerPieceEnBaseAvecHashReel(
+                poste, agentCreateur, StatutPiece.DETRUITE, TypeDocument.CNI, NUMERO_DOCUMENT_CLAIR);
+        String token = creerEtLoginToken("PN-2024-00661", Role.AGENT, poste);
+
+        mockMvc.perform(post("/api/v1/pieces")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(creerPieceJson(LocalDate.of(2026, 9, 13))))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
+    void creer_avecNumeroDocumentIdentiqueMaisTypeDocumentDifferent_shouldRetourner201SansDetectionDoublon()
+            throws Exception {
+        Poste poste = creerPoste();
+        Agent agentCreateur = creerAgentActif(poste, "PN-2024-00662", Role.AGENT);
+        creerPieceEnBaseAvecHashReel(
+                poste, agentCreateur, StatutPiece.DISPONIBLE, TypeDocument.PASSEPORT, NUMERO_DOCUMENT_CLAIR);
+        String token = creerEtLoginToken("PN-2024-00663", Role.AGENT, poste);
+
+        mockMvc.perform(post("/api/v1/pieces")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(creerPieceJson(LocalDate.of(2026, 9, 13))))
+                .andExpect(status().isCreated());
     }
 
     @Test
