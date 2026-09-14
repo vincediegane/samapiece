@@ -36,6 +36,8 @@ services:
       SMS_SENDER_ID: ${SMS_SENDER_ID}
       SMS_TIMEOUT_MS: ${SMS_TIMEOUT_MS}
       SMS_MAX_TENTATIVES: ${SMS_MAX_TENTATIVES}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
     depends_on:
       minio:
         condition: service_healthy

@@ -5,6 +5,10 @@ spring:
     password: ${DB_PASSWORD}
   rabbitmq:
     host: ${RABBITMQ_HOST:localhost}
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
 
 samapiece:
   minio:
@@ -16,6 +20,14 @@ samapiece:
     host: ${MEILISEARCH_HOST:http://localhost:7700}
     api-key: ${MEILISEARCH_API_KEY:samapiece_dev_master_key_change_me}
     index-pieces: ${MEILISEARCH_INDEX_PIECES:pieces}
+  rate-limiting:
+    recherche-publique:
+      capacite: ${RATE_LIMIT_RECHERCHE_CAPACITE:10}
+      periode-secondes: ${RATE_LIMIT_RECHERCHE_PERIODE_SECONDES:60}
+  captcha:
+    seuil-echecs-consecutifs: ${CAPTCHA_SEUIL_ECHECS:5}
+    ttl-compteur-echecs-secondes: ${CAPTCHA_TTL_COMPTEUR_SECONDES:600}
+    ttl-defi-secondes: ${CAPTCHA_TTL_DEFI_SECONDES:120}
 
 logging:
   level:

@@ -2,6 +2,8 @@ management:
   health:
     rabbit:
       enabled: false
+    redis:
+      enabled: false
 
 samapiece:
   jwt:
