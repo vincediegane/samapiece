@@ -11,5 +11,6 @@ RUN npm run build
 # ---- Stage "runtime" ----
 FROM nginx:alpine AS runtime
 COPY --from=build /app/dist /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+ENV NGINX_ENVSUBST_FILTER='^SERVER_PORT$'
+COPY nginx.conf.template /etc/nginx/templates/default.conf.template
 EXPOSE 80
