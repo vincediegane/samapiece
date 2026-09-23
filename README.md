@@ -33,9 +33,18 @@ Une fois `docker-compose ps` affiche tous les services en `healthy` (le `fronten
 |---|---|
 | Backend (health) | http://localhost:8080/actuator/health |
 | Frontend | http://localhost:8081 |
+| Frontend → API backend | http://localhost:8081/api/v1/... (proxifié vers le backend) |
 | Meilisearch | http://localhost:7700 |
 | MinIO (console) | http://localhost:9001 |
 | RabbitMQ (management) | http://localhost:15672 |
+
+Le conteneur `frontend` (nginx) proxifie tout `/api/*` vers le backend (`location /api/` dans `frontend/nginx.conf.template`, résolue au démarrage via `envsubst` sur `SERVER_PORT`). Pour vérifier que le proxy fonctionne :
+
+```bash
+curl -i http://localhost:8081/api/v1/postes
+```
+
+Attendu : `HTTP/1.1 200` et un en-tête `Content-Type: application/json` (pas `text/html`, ce qui indiquerait que la requête est retombée sur `index.html`).
 
 **Important** : `postgres`, `redis`, `meilisearch`, `minio` et `rabbitmq` démarrent avec la stack mais ne sont pas encore réellement utilisés par le backend à ce stade (cf. ticket #1) — leur présence ne garantit pas une intégration fonctionnelle. Le backend expose `/actuator/health` en `UP` sans jamais ouvrir de connexion JDBC vers `postgres`.
 
