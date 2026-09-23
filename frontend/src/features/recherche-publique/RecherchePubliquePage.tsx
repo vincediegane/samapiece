@@ -4,6 +4,7 @@ import { rechercher } from './recherchePubliqueApi';
 import type { RecherchePubliqueRequest, RecherchePubliqueResponse } from './types';
 import { TYPE_DOCUMENT_LABELS } from '../pieces/types';
 import type { TypeDocument } from '../pieces/types';
+import { IconCheck, IconDocument, IconSearch } from '../../shared/icons';
 
 interface FormState {
   typeDocument: TypeDocument | '';
@@ -72,95 +73,170 @@ function RecherchePubliquePage() {
   }
 
   return (
-    <main>
-      <h1>Recherche publique</h1>
+    <main className="mx-auto w-full max-w-2xl px-4 py-10 sm:px-6">
+      <h1 className="page-title">Rechercher ma pièce</h1>
+      <p className="mb-7 text-[15px] leading-relaxed text-slate-600">
+        Renseignez votre nom et au moins le numéro du document ou votre date de naissance. Aucune
+        inscription n&apos;est nécessaire.
+      </p>
 
-      {erreurServeur && <p role="alert">{erreurServeur}</p>}
+      {erreurServeur && (
+        <p role="alert" className="alert-error">
+          {erreurServeur}
+        </p>
+      )}
 
       {resultat &&
         (resultat.trouve ? (
-          <section aria-label="Résultat de la recherche">
-            <h2>Pièce retrouvée</h2>
-            <p>
-              Type de document :{' '}
-              {resultat.typeDocument ? TYPE_DOCUMENT_LABELS[resultat.typeDocument] : ''}
+          <section
+            aria-label="Résultat de la recherche"
+            className="mb-6 rounded-2xl border border-primary-500/25 bg-white p-7 shadow-sm"
+          >
+            <div className="mb-4 flex items-center gap-3">
+              <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-primary-50 text-primary-500">
+                <IconCheck width={20} height={20} />
+              </span>
+              <h2 className="text-lg font-extrabold text-primary-700">
+                Bonne nouvelle, votre pièce a été retrouvée !
+              </h2>
+            </div>
+            <div className="mb-4 grid gap-4 rounded-xl bg-slate-50 p-5 sm:grid-cols-2">
+              <p>
+                <span className="mb-0.5 block text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  Type de document
+                </span>
+                {resultat.typeDocument ? TYPE_DOCUMENT_LABELS[resultat.typeDocument] : ''}
+              </p>
+              <p>
+                <span className="mb-0.5 block text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  Poste
+                </span>
+                {resultat.poste?.nom}
+              </p>
+              <p>
+                <span className="mb-0.5 block text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  Adresse
+                </span>
+                {resultat.poste?.adresse}
+              </p>
+              <p>
+                <span className="mb-0.5 block text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  Horaires
+                </span>
+                {resultat.poste?.horaires}
+              </p>
+              <p>
+                <span className="mb-0.5 block text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  Téléphone
+                </span>
+                {resultat.poste?.telephone}
+              </p>
+              <p>
+                <span className="mb-0.5 block text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  Référence de dossier
+                </span>
+                {resultat.referenceDossier}
+              </p>
+            </div>
+            <p className="text-sm text-slate-500">
+              Présentez-vous au poste avec une pièce justificative de votre identité pour
+              récupérer votre document.
             </p>
-            <p>Poste : {resultat.poste?.nom}</p>
-            <p>Adresse : {resultat.poste?.adresse}</p>
-            <p>Horaires : {resultat.poste?.horaires}</p>
-            <p>Téléphone : {resultat.poste?.telephone}</p>
-            <p>Référence de dossier : {resultat.referenceDossier}</p>
           </section>
         ) : (
-          <section aria-label="Aucun résultat">
-            <p>Aucune pièce correspondant à ces critères n&apos;a été retrouvée.</p>
+          <section
+            aria-label="Aucun résultat"
+            className="mb-6 rounded-2xl border border-slate-200 bg-white p-7"
+          >
+            <p className="mb-3">
+              Aucune pièce correspondant à ces critères n&apos;a été retrouvée.
+            </p>
             {alerteProposee ? (
               <p>Cette fonctionnalité arrive bientôt.</p>
             ) : (
-              <button type="button" onClick={() => setAlerteProposee(true)}>
+              <button type="button" className="btn-outline" onClick={() => setAlerteProposee(true)}>
                 Recevoir une alerte si cette pièce est déposée
               </button>
             )}
           </section>
         ))}
 
-      <form onSubmit={soumettreFormulaire}>
-        <label>
-          Type de document
-          <select
-            value={formulaire.typeDocument}
-            onChange={(e) =>
-              setFormulaire({ ...formulaire, typeDocument: e.target.value as TypeDocument })
-            }
-          >
-            <option value="" disabled>
-              Sélectionner un type
-            </option>
-            {(Object.keys(TYPE_DOCUMENT_LABELS) as TypeDocument[]).map((type) => (
-              <option key={type} value={type}>
-                {TYPE_DOCUMENT_LABELS[type]}
+      <form
+        onSubmit={soumettreFormulaire}
+        className="rounded-2xl border border-slate-200 bg-white p-7 shadow-sm flex flex-col gap-5"
+      >
+        <label className="field">
+          <span className="field-label">Type de document</span>
+          <div className="relative">
+            <IconDocument
+              width={16}
+              height={16}
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+            />
+            <select
+              className="field-input pl-9"
+              value={formulaire.typeDocument}
+              onChange={(e) =>
+                setFormulaire({ ...formulaire, typeDocument: e.target.value as TypeDocument })
+              }
+            >
+              <option value="" disabled>
+                Sélectionner un type
               </option>
-            ))}
-          </select>
+              {(Object.keys(TYPE_DOCUMENT_LABELS) as TypeDocument[]).map((type) => (
+                <option key={type} value={type}>
+                  {TYPE_DOCUMENT_LABELS[type]}
+                </option>
+              ))}
+            </select>
+          </div>
         </label>
         {erreursValidation.typeDocument && (
-          <span role="alert">{erreursValidation.typeDocument}</span>
+          <span role="alert" className="field-error -mt-3">
+            {erreursValidation.typeDocument}
+          </span>
         )}
 
-        <label>
-          Nom du titulaire
+        <label className="field">
+          <span className="field-label">Nom du titulaire</span>
           <input
             type="text"
+            className="field-input"
             value={formulaire.nomTitulaire}
             onChange={(e) => setFormulaire({ ...formulaire, nomTitulaire: e.target.value })}
           />
         </label>
         {erreursValidation.nomTitulaire && (
-          <span role="alert">{erreursValidation.nomTitulaire}</span>
+          <span role="alert" className="field-error -mt-3">
+            {erreursValidation.nomTitulaire}
+          </span>
         )}
 
-        <label>
-          Prénom du titulaire
+        <label className="field">
+          <span className="field-label">Prénom du titulaire</span>
           <input
             type="text"
+            className="field-input"
             value={formulaire.prenomTitulaire}
             onChange={(e) => setFormulaire({ ...formulaire, prenomTitulaire: e.target.value })}
           />
         </label>
 
-        <label>
-          Numéro du document
+        <label className="field">
+          <span className="field-label">Numéro du document</span>
           <input
             type="text"
+            className="field-input"
             value={formulaire.numeroDocument}
             onChange={(e) => setFormulaire({ ...formulaire, numeroDocument: e.target.value })}
           />
         </label>
 
-        <label>
-          Date de naissance du titulaire
+        <label className="field">
+          <span className="field-label">Date de naissance du titulaire</span>
           <input
             type="date"
+            className="field-input"
             value={formulaire.dateNaissanceTitulaire}
             onChange={(e) =>
               setFormulaire({ ...formulaire, dateNaissanceTitulaire: e.target.value })
@@ -168,10 +244,17 @@ function RecherchePubliquePage() {
           />
         </label>
         {erreursValidation.discriminant && (
-          <span role="alert">{erreursValidation.discriminant}</span>
+          <span role="alert" className="field-error">
+            {erreursValidation.discriminant}
+          </span>
         )}
 
-        <button type="submit" disabled={enEnvoi}>
+        <button
+          type="submit"
+          className="btn-primary flex items-center gap-2 self-start"
+          disabled={enEnvoi}
+        >
+          <IconSearch width={16} height={16} />
           Rechercher
         </button>
       </form>

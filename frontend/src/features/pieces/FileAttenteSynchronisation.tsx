@@ -24,6 +24,15 @@ function libelleStatut(item: FicheEnAttente): string {
   return LIBELLES_STATUT[item.statut];
 }
 
+const BORDURE_STATUT: Record<StatutFicheEnAttente, string> = {
+  en_attente: 'border-l-slate-300',
+  en_cours: 'border-l-info-500',
+  echec_reseau: 'border-l-danger-500',
+  conflit_doublon: 'border-l-accent-500',
+  echec_definitif: 'border-l-danger-500',
+  synchronise: 'border-l-primary-500',
+};
+
 function FileAttenteSynchronisation() {
   const [itemsAffiches, setItemsAffiches] = useState<FicheEnAttente[]>([]);
   const idsSynchronisesProgrammes = useRef<Set<string>>(new Set());
@@ -79,21 +88,31 @@ function FileAttenteSynchronisation() {
   );
 
   return (
-    <section aria-label="File d'attente de synchronisation">
-      <h2>File d&apos;attente de synchronisation</h2>
-      {aDesEchecs && (
-        <button type="button" onClick={() => reessayerTout()}>
-          Réessayer tout maintenant
-        </button>
-      )}
-      <ul>
+    <section aria-label="File d'attente de synchronisation" className="card">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <h2 className="section-title mb-0">File d&apos;attente de synchronisation</h2>
+        {aDesEchecs && (
+          <button type="button" className="btn-outline" onClick={() => reessayerTout()}>
+            Réessayer tout maintenant
+          </button>
+        )}
+      </div>
+      <ul className="flex flex-col gap-2">
         {itemsAffiches.map((item) => (
-          <li key={item.id}>
-            <p>
+          <li
+            key={item.id}
+            data-statut={item.statut}
+            className={`flex flex-wrap items-center justify-between gap-3 rounded-md border-l-4 bg-slate-50 px-3 py-2 ${BORDURE_STATUT[item.statut]}`}
+          >
+            <p className="text-sm text-slate-700">
               {item.payload.prenomTitulaire} {item.payload.nomTitulaire} — {libelleStatut(item)}
             </p>
             {(item.statut === 'echec_reseau' || item.statut === 'echec_definitif') && (
-              <button type="button" onClick={() => reessayerItem(item.id)}>
+              <button
+                type="button"
+                className="btn-danger-outline"
+                onClick={() => reessayerItem(item.id)}
+              >
                 Réessayer maintenant
               </button>
             )}

@@ -1,68 +1,182 @@
+@import 'tailwindcss';
+
+/* ---------------------------------------------------------------------------
+ * SamaPièce — jetons de design (Tailwind v4, config CSS-first).
+ * Palette inspirée du drapeau sénégalais (vert / jaune) pour une identité
+ * visuelle cohérente avec les supports de présentation du projet.
+ * --------------------------------------------------------------------------- */
+@theme {
+  --font-sans:
+    'Segoe UI', system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
+
+  --color-primary-50: #e7f3ec;
+  --color-primary-500: #00663d;
+  --color-primary-600: #005a35;
+  --color-primary-700: #004d2e;
+
+  --color-accent-500: #f7b500;
+
+  --color-danger-50: #fdecea;
+  --color-danger-500: #b3261e;
+
+  --color-info-50: #e6f2f9;
+  --color-info-500: #0f5e8c;
+}
+
+/* Thème clair uniquement : lisibilité maximale en poste et lors des
+   démonstrations (écran partagé / vidéoprojecteur), pas de variante sombre. */
 :root {
-  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
-
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
-
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-a:hover {
-  color: #535bf2;
+  color-scheme: light;
 }
 
 body {
-  margin: 0;
-  display: flex;
-  place-items: center;
-  min-width: 320px;
-  min-height: 100vh;
+  @apply m-0 min-h-screen bg-slate-50 text-slate-900 antialiased;
 }
 
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
+#root {
+  @apply flex min-h-screen flex-col;
 }
 
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  background-color: #1a1a1a;
-  cursor: pointer;
-  transition: border-color 0.25s;
-}
-button:hover {
-  border-color: #646cff;
-}
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
+/* --- Composants réutilisables --------------------------------------------- */
+
+@utility btn {
+  @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold
+    transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2
+    focus-visible:outline-accent-500 disabled:cursor-not-allowed disabled:opacity-50;
 }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
+@layer components {
+  .card {
+    @apply rounded-xl border border-slate-200 bg-white p-6 shadow-sm;
   }
-  a:hover {
-    color: #747bff;
+
+  .page {
+    @apply mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 lg:py-10;
   }
-  button {
-    background-color: #f9f9f9;
+
+  .page-title {
+    @apply mb-6 inline-block border-b-4 border-accent-500 pb-2 text-2xl font-bold text-slate-900;
+  }
+
+  .section-title {
+    @apply mb-3 text-lg font-bold text-primary-700;
+  }
+
+  .field {
+    @apply flex flex-col gap-1.5;
+  }
+
+  .field-label {
+    @apply text-sm font-semibold text-slate-800;
+  }
+
+  .field-input {
+    @apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900
+      placeholder:text-slate-400
+      focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-50;
+  }
+
+  .field-error {
+    @apply block text-sm font-medium text-danger-500;
+  }
+
+  .btn-primary {
+    @apply btn bg-primary-500 text-white hover:bg-primary-700;
+  }
+
+  .btn-outline {
+    @apply btn border border-primary-500 bg-white text-primary-500 hover:bg-primary-50;
+  }
+
+  .btn-danger-outline {
+    @apply btn border border-danger-500 bg-white px-3 py-1.5 text-xs text-danger-500 hover:bg-danger-50;
+  }
+
+  .alert-error {
+    @apply mb-5 rounded-lg border border-danger-500 bg-danger-50 px-4 py-3 font-semibold text-danger-500;
+  }
+
+  .alert-info {
+    @apply mb-5 rounded-lg border border-info-500 bg-info-50 px-4 py-3 text-sm text-info-500;
+  }
+
+  .alert-success {
+    @apply mb-5 rounded-lg border border-primary-500 bg-primary-50 px-4 py-3 text-primary-700;
+  }
+
+  .badge-dot {
+    @apply inline-block h-2.5 w-2.5 flex-shrink-0 rounded-full;
+  }
+
+  .table-wrap {
+    @apply overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm;
+  }
+
+  .table {
+    @apply w-full border-collapse text-sm;
+  }
+
+  .table thead {
+    @apply bg-primary-50;
+  }
+
+  .table th {
+    @apply px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-primary-700;
+  }
+
+  .table td {
+    @apply border-t border-slate-200 px-4 py-2.5;
+  }
+
+  .table tbody tr:hover {
+    @apply bg-slate-50;
+  }
+
+  /* --- Coquille publique (accueil, recherche) ------------------------------ */
+
+  .public-header {
+    @apply flex flex-wrap items-center justify-between gap-4 bg-primary-500 px-4 py-3 sm:px-10;
+  }
+
+  .public-nav-link {
+    @apply text-sm font-medium text-white/85 hover:text-white;
+  }
+
+  .public-cta {
+    @apply btn bg-accent-500 px-5 py-3 text-primary-700 hover:bg-accent-500/90;
+  }
+
+  .public-ghost-btn {
+    @apply btn border border-white/35 bg-transparent text-white hover:bg-white/10;
+  }
+
+  /* --- Coquille agent (sidebar) --------------------------------------------- */
+
+  .sidebar-link {
+    @apply flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50;
+  }
+
+  .sidebar-link-active {
+    @apply flex items-center gap-2.5 rounded-lg bg-primary-50 px-3 py-2.5 text-sm font-bold text-primary-700;
+  }
+
+  /* --- Tuiles de statistiques ------------------------------------------------ */
+
+  .stat-tile {
+    @apply rounded-xl border border-slate-200 bg-white p-5;
+  }
+
+  .stat-tile-label {
+    @apply mb-2 block text-xs font-semibold text-slate-500;
+  }
+
+  .stat-tile-value {
+    @apply text-3xl font-extrabold text-slate-900;
+  }
+
+  /* --- Puces de rôle / type de document -------------------------------------- */
+
+  .role-dot {
+    @apply inline-block h-2 w-2 flex-shrink-0 rounded-full;
   }
 }
