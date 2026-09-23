@@ -1,6 +1,5 @@
 package sn.samapiece.iam;
 
-import java.security.SecureRandom;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -18,20 +17,18 @@ import sn.samapiece.referentiel.PosteRepository;
 @Service
 public class AgentAdminService {
 
-    private static final int LONGUEUR_MOT_DE_PASSE = 12;
-    private static final String ALPHABET_MOT_DE_PASSE =
-            "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%&*";
-
     private final AgentRepository agentRepository;
     private final PosteRepository posteRepository;
     private final PasswordEncoder passwordEncoder;
-    private final SecureRandom secureRandom = new SecureRandom();
+    private final MotDePasseTemporaireGenerator motDePasseTemporaireGenerator;
 
     public AgentAdminService(
-            AgentRepository agentRepository, PosteRepository posteRepository, PasswordEncoder passwordEncoder) {
+            AgentRepository agentRepository, PosteRepository posteRepository, PasswordEncoder passwordEncoder,
+            MotDePasseTemporaireGenerator motDePasseTemporaireGenerator) {
         this.agentRepository = agentRepository;
         this.posteRepository = posteRepository;
         this.passwordEncoder = passwordEncoder;
+        this.motDePasseTemporaireGenerator = motDePasseTemporaireGenerator;
     }
 
     @Transactional
@@ -47,7 +44,7 @@ public class AgentAdminService {
             throw new MatriculeDejaUtiliseException(request.matricule());
         }
 
-        String motDePasseTemporaire = genererMotDePasseTemporaire();
+        String motDePasseTemporaire = motDePasseTemporaireGenerator.generer();
         Agent agent = new Agent(
                 poste, request.matricule(), request.nom(), request.role(),
                 passwordEncoder.encode(motDePasseTemporaire));
@@ -142,14 +139,5 @@ public class AgentAdminService {
         if (!autorise) {
             throw new AccesRefuseException("Poste hors perimetre de l'appelant.");
         }
-    }
-
-    private String genererMotDePasseTemporaire() {
-        StringBuilder motDePasse = new StringBuilder(LONGUEUR_MOT_DE_PASSE);
-        for (int i = 0; i < LONGUEUR_MOT_DE_PASSE; i++) {
-            int index = secureRandom.nextInt(ALPHABET_MOT_DE_PASSE.length());
-            motDePasse.append(ALPHABET_MOT_DE_PASSE.charAt(index));
-        }
-        return motDePasse.toString();
     }
 }

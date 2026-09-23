@@ -40,6 +40,11 @@ sentry:
   environment: ${SPRING_PROFILES_ACTIVE:dev}
 
 samapiece:
+  bootstrap-admin:
+    enabled: ${BOOTSTRAP_ADMIN_ENABLED:false}
+    matricule: ${BOOTSTRAP_ADMIN_MATRICULE:}
+    nom: ${BOOTSTRAP_ADMIN_NOM:}
+    poste-id: ${BOOTSTRAP_ADMIN_POSTE_ID:}
   jwt:
     secret: ${JWT_SECRET}
   photo:

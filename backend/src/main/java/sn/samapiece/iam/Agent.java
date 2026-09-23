@@ -59,6 +59,9 @@ public class Agent {
     @Column(name = "maj_le", nullable = false, insertable = false)
     private OffsetDateTime majLe;
 
+    @Column(name = "doit_changer_mot_de_passe", nullable = false)
+    private boolean doitChangerMotDePasse;
+
     protected Agent() {
     }
 
@@ -72,6 +75,14 @@ public class Agent {
         this.derniereConnexion = null;
         this.tentativesEchouees = 0;
         this.verrouilleJusqua = null;
+        this.doitChangerMotDePasse = false;
+    }
+
+    public Agent(
+            Poste poste, String matricule, String nom, Role role, String hashMotDePasse,
+            boolean doitChangerMotDePasse) {
+        this(poste, matricule, nom, role, hashMotDePasse);
+        this.doitChangerMotDePasse = doitChangerMotDePasse;
     }
 
     public UUID getId() {
@@ -152,6 +163,16 @@ public class Agent {
     public void modifierInformations(String nom, Poste poste) {
         this.nom = Objects.requireNonNull(nom, "nom");
         this.poste = Objects.requireNonNull(poste, "poste");
+    }
+
+    public boolean isDoitChangerMotDePasse() {
+        return doitChangerMotDePasse;
+    }
+
+    /** Met a jour le hash et leve le flag de renouvellement force. */
+    public void changerMotDePasse(String nouveauHashMotDePasse) {
+        this.hashMotDePasse = Objects.requireNonNull(nouveauHashMotDePasse, "nouveauHashMotDePasse");
+        this.doitChangerMotDePasse = false;
     }
 
     @Override

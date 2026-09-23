@@ -20,6 +20,7 @@ public class JwtService {
     public static final String CLAIM_MATRICULE = "matricule";
     public static final String CLAIM_ROLE = "role";
     public static final String CLAIM_TYPE = "typ";
+    public static final String CLAIM_DOIT_CHANGER_MOT_DE_PASSE = "doitChangerMotDePasse";
     public static final String TYPE_ACCESS = "access";
     public static final String TYPE_REFRESH = "refresh";
 
@@ -42,13 +43,14 @@ public class JwtService {
         this.clock = clock;
     }
 
-    public String genererAccessToken(UUID agentId, String matricule, Role role) {
+    public String genererAccessToken(UUID agentId, String matricule, Role role, boolean doitChangerMotDePasse) {
         Instant maintenant = clock.instant();
         return Jwts.builder()
                 .subject(agentId.toString())
                 .claim(CLAIM_MATRICULE, matricule)
                 .claim(CLAIM_ROLE, role.name())
                 .claim(CLAIM_TYPE, TYPE_ACCESS)
+                .claim(CLAIM_DOIT_CHANGER_MOT_DE_PASSE, doitChangerMotDePasse)
                 .issuedAt(Date.from(maintenant))
                 .expiration(Date.from(maintenant.plus(ACCESS_TOKEN_TTL)))
                 .signWith(signingKey)

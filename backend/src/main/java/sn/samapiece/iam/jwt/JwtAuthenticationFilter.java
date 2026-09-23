@@ -36,8 +36,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 if (JwtService.TYPE_ACCESS.equals(claims.get(JwtService.CLAIM_TYPE, String.class))) {
                     String matricule = claims.get(JwtService.CLAIM_MATRICULE, String.class);
                     Role role = Role.valueOf(claims.get(JwtService.CLAIM_ROLE, String.class));
-                    SecurityContextHolder.getContext().setAuthentication(
-                            new UsernamePasswordAuthenticationToken(matricule, null, List.of(role)));
+                    Boolean doitChangerMotDePasse =
+                            claims.get(JwtService.CLAIM_DOIT_CHANGER_MOT_DE_PASSE, Boolean.class);
+                    UsernamePasswordAuthenticationToken authentication =
+                            new UsernamePasswordAuthenticationToken(matricule, null, List.of(role));
+                    authentication.setDetails(Boolean.TRUE.equals(doitChangerMotDePasse));
+                    SecurityContextHolder.getContext().setAuthentication(authentication);
                 }
                 // typ = refresh présenté sur une route protégée : on ignore silencieusement,
                 // aucune authentification n'est posée -> 401 via anyRequest().authenticated().

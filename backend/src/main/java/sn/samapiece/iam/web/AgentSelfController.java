@@ -1,7 +1,10 @@
 package sn.samapiece.iam.web;
 
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import sn.samapiece.iam.AgentSelfService;
@@ -19,5 +22,11 @@ public class AgentSelfController {
     @GetMapping("/moi")
     public ResponseEntity<AgentResponse> moi() {
         return ResponseEntity.ok(agentSelfService.moi());
+    }
+
+    @PutMapping("/moi/mot-de-passe")
+    public ResponseEntity<ChangerMotDePasseResponse> changerMotDePasse(
+            @Valid @RequestBody ChangerMotDePasseRequest request) {
+        return ResponseEntity.ok(agentSelfService.changerMotDePasse(request));
     }
 }
