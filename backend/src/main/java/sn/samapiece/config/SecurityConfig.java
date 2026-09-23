@@ -21,6 +21,7 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.servlet.HandlerExceptionResolver;
+import sn.samapiece.iam.jwt.ForcerChangementMotDePasseFilter;
 import sn.samapiece.iam.jwt.JwtAuthenticationFilter;
 import sn.samapiece.iam.jwt.JwtService;
 import sn.samapiece.recherche.securite.CaptchaVerifier;
@@ -58,6 +59,8 @@ public class SecurityConfig {
             @Qualifier("handlerExceptionResolver") HandlerExceptionResolver handlerExceptionResolver) throws Exception {
 
         JwtAuthenticationFilter jwtAuthenticationFilter = new JwtAuthenticationFilter(jwtService);
+        ForcerChangementMotDePasseFilter forcerChangementMotDePasseFilter =
+                new ForcerChangementMotDePasseFilter(handlerExceptionResolver);
         RecherchePubliqueCaptchaFilter captchaFilter = new RecherchePubliqueCaptchaFilter(
                 echecRechercheCounterService, captchaVerifier, objectMapper, handlerExceptionResolver);
         RecherchePubliqueRateLimitFilter rateLimitFilter = new RecherchePubliqueRateLimitFilter(
@@ -77,6 +80,7 @@ public class SecurityConfig {
                     .requestMatchers(HttpMethod.POST, "/api/v1/auth/login", "/api/v1/auth/refresh").permitAll()
                     .anyRequest().authenticated())
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+            .addFilterAfter(forcerChangementMotDePasseFilter, JwtAuthenticationFilter.class)
             .addFilterBefore(captchaFilter, JwtAuthenticationFilter.class)
             .addFilterBefore(rateLimitFilter, RecherchePubliqueCaptchaFilter.class);
         return http.build();
