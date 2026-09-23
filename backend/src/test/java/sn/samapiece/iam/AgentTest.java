@@ -80,6 +80,32 @@ class AgentTest {
     }
 
     @Test
+    void constructeurCinqArguments_shouldInitialiserDoitChangerMotDePasseAFaux() {
+        Agent agent = nouvelAgent();
+
+        assertThat(agent.isDoitChangerMotDePasse()).isFalse();
+    }
+
+    @Test
+    void constructeurSixArguments_avecDoitChangerMotDePasseVrai_shouldInitialiserLeFlag() {
+        Agent agent = new Agent(
+                null, "PN-2024-00124", "Diop Awa", Role.AGENT, "$2a$10$hashopaque", true);
+
+        assertThat(agent.isDoitChangerMotDePasse()).isTrue();
+    }
+
+    @Test
+    void changerMotDePasse_shouldMettreAJourLeHashEtRemettreLeFlagAFaux() {
+        Agent agent = new Agent(
+                null, "PN-2024-00125", "Diop Awa", Role.AGENT, "$2a$10$hashopaque", true);
+
+        agent.changerMotDePasse("$2a$10$nouveauHash");
+
+        assertThat(agent.getHashMotDePasse()).isEqualTo("$2a$10$nouveauHash");
+        assertThat(agent.isDoitChangerMotDePasse()).isFalse();
+    }
+
+    @Test
     void modifierInformations_shouldRemplacerNomEtPoste() {
         Agent agent = nouvelAgent();
         Poste nouveauPoste = new Poste(
