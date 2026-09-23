@@ -57,5 +57,6 @@ export function useRafraichissementSession(options: UseRafraichissementSessionOp
 
     planifier();
     return () => window.clearTimeout(idCourant);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- un seul montage tant que le composant appelant reste monté (cf. spec #59)
   }, []);
 }

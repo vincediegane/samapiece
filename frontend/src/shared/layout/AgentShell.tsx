@@ -25,7 +25,13 @@ function initiales(nom: string): string {
     .join('');
 }
 
-function AgentShell({ actif, onNaviguer, onRetourPublic, onDeconnexion, children }: AgentShellProps) {
+function AgentShell({
+  actif,
+  onNaviguer,
+  onRetourPublic,
+  onDeconnexion,
+  children,
+}: AgentShellProps) {
   const [agent, setAgent] = useState<AgentCourant | null>(null);
   const [nombreEnAttente, setNombreEnAttente] = useState(0);
 

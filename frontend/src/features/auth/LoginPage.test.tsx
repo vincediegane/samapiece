@@ -84,9 +84,7 @@ describe('LoginPage', () => {
 
     await remplirEtSoumettre('PN-2024-00001', 'mauvais-mdp');
 
-    expect(
-      await screen.findByText('Matricule ou mot de passe invalide.'),
-    ).toBeInTheDocument();
+    expect(await screen.findByText('Matricule ou mot de passe invalide.')).toBeInTheDocument();
   });
 
   it('affiche le message d’erreur sur compte verrouillé (423)', async () => {
@@ -111,8 +109,6 @@ describe('LoginPage', () => {
 
     await remplirEtSoumettre('PN-2024-00001', 'secret123');
 
-    expect(
-      await screen.findByText('Une erreur est survenue, réessayez.'),
-    ).toBeInTheDocument();
+    expect(await screen.findByText('Une erreur est survenue, réessayez.')).toBeInTheDocument();
   });
 });

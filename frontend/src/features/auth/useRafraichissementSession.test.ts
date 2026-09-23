@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { MARGE_RAFRAICHISSEMENT_MS, calculerDelaiRafraichissement } from './useRafraichissementSession';
+import {
+  MARGE_RAFRAICHISSEMENT_MS,
+  calculerDelaiRafraichissement,
+} from './useRafraichissementSession';
 
 describe('calculerDelaiRafraichissement', () => {
   it('retourne msAvantExpiration - MARGE_RAFRAICHISSEMENT_MS quand positif', () => {
