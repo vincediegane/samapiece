@@ -3,6 +3,8 @@ import type { ReactNode } from 'react';
 import { recupererAgentCourant } from '../../features/dashboard/dashboardApi';
 import type { AgentCourant } from '../../features/dashboard/types';
 import { listerFile } from '../offline/fileSynchronisation';
+import { viderSession } from '../../features/auth/session';
+import { useRafraichissementSession } from '../../features/auth/useRafraichissementSession';
 import { IconChart, IconCloudSync, IconDocument, IconLogout, IconUsers } from '../icons';
 
 export type OngletAgent = 'pieces' | 'dashboard' | 'agents';
@@ -11,6 +13,7 @@ interface AgentShellProps {
   actif: OngletAgent;
   onNaviguer: (onglet: OngletAgent) => void;
   onRetourPublic: () => void;
+  onDeconnexion: () => void;
   children: ReactNode;
 }
 
@@ -22,9 +25,17 @@ function initiales(nom: string): string {
     .join('');
 }
 
-function AgentShell({ actif, onNaviguer, onRetourPublic, children }: AgentShellProps) {
+function AgentShell({
+  actif,
+  onNaviguer,
+  onRetourPublic,
+  onDeconnexion,
+  children,
+}: AgentShellProps) {
   const [agent, setAgent] = useState<AgentCourant | null>(null);
   const [nombreEnAttente, setNombreEnAttente] = useState(0);
+
+  useRafraichissementSession({ onSessionExpiree: onDeconnexion });
 
   useEffect(() => {
     recupererAgentCourant()
@@ -51,8 +62,8 @@ function AgentShell({ actif, onNaviguer, onRetourPublic, children }: AgentShellP
   }, []);
 
   function seDeconnecter() {
-    window.localStorage.removeItem('samapiece.accessToken');
-    onRetourPublic();
+    viderSession();
+    onDeconnexion();
   }
 
   return (
