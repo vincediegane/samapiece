@@ -57,7 +57,8 @@ public class AuthService {
         agent.enregistrerConnexionReussie();
         agentRepository.save(agent);
 
-        String accessToken = jwtService.genererAccessToken(agent.getId(), agent.getMatricule(), agent.getRole());
+        String accessToken = jwtService.genererAccessToken(
+                agent.getId(), agent.getMatricule(), agent.getRole(), agent.isDoitChangerMotDePasse());
         String refreshToken = jwtService.genererRefreshToken(agent.getId(), agent.getMatricule());
         return new LoginResponse(
                 accessToken, refreshToken, jwtService.accessTokenTtlSecondes(),
@@ -88,7 +89,8 @@ public class AuthService {
             throw new CompteVerrouilleException("Compte verrouille");
         }
 
-        String accessToken = jwtService.genererAccessToken(agent.getId(), agent.getMatricule(), agent.getRole());
+        String accessToken = jwtService.genererAccessToken(
+                agent.getId(), agent.getMatricule(), agent.getRole(), agent.isDoitChangerMotDePasse());
         return new RefreshResponse(accessToken, jwtService.accessTokenTtlSecondes());
     }
 }

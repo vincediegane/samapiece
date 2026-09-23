@@ -28,15 +28,27 @@ class JwtServiceTest {
         JwtService jwtService = new JwtService(jwtProperties());
         UUID agentId = UUID.randomUUID();
 
-        String token = jwtService.genererAccessToken(agentId, "PN-2024-00123", Role.CHEF_POSTE);
+        String token = jwtService.genererAccessToken(agentId, "PN-2024-00123", Role.CHEF_POSTE, false);
         Claims claims = jwtService.analyserToken(token);
 
         assertThat(claims.getSubject()).isEqualTo(agentId.toString());
         assertThat(claims.get(JwtService.CLAIM_MATRICULE, String.class)).isEqualTo("PN-2024-00123");
         assertThat(claims.get(JwtService.CLAIM_ROLE, String.class)).isEqualTo("CHEF_POSTE");
         assertThat(claims.get(JwtService.CLAIM_TYPE, String.class)).isEqualTo(JwtService.TYPE_ACCESS);
+        assertThat(claims.get(JwtService.CLAIM_DOIT_CHANGER_MOT_DE_PASSE, Boolean.class)).isFalse();
         assertThat(claims.getIssuedAt()).isNotNull();
         assertThat(claims.getExpiration()).isAfter(claims.getIssuedAt());
+    }
+
+    @Test
+    void genererAccessToken_avecDoitChangerMotDePasseTrue_shouldContenirClaim() {
+        JwtService jwtService = new JwtService(jwtProperties());
+        UUID agentId = UUID.randomUUID();
+
+        String token = jwtService.genererAccessToken(agentId, "PN-2024-00123", Role.ADMIN_NATIONAL, true);
+        Claims claims = jwtService.analyserToken(token);
+
+        assertThat(claims.get(JwtService.CLAIM_DOIT_CHANGER_MOT_DE_PASSE, Boolean.class)).isTrue();
     }
 
     @Test
