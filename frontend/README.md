@@ -17,6 +17,16 @@ npm run dev
 Le serveur de développement Vite démarre sur `http://localhost:5173` et affiche la page
 d'accueil (`src/features/home/HomePage.tsx`).
 
+Le backend doit tourner sur `localhost:8080` pour que les appels `/api/*` aboutissent (proxy
+`server.proxy` configuré dans `vite.config.ts`) : `docker-compose up backend` depuis la racine
+du repo, ou `./mvnw spring-boot:run` depuis `backend/`. Pour vérifier que le proxy fonctionne :
+
+```bash
+curl -i http://localhost:5173/api/v1/postes
+```
+
+Attendu : `HTTP/1.1 200` et un en-tête `Content-Type: application/json` (pas `text/html`).
+
 ## Lint et formatage
 
 ```bash

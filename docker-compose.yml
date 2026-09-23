@@ -59,6 +59,11 @@ services:
       args:
         VITE_SENTRY_DSN: ${VITE_SENTRY_DSN}
     image: samapiece-frontend:dev
+    environment:
+      SERVER_PORT: ${SERVER_PORT}
+    depends_on:
+      backend:
+        condition: service_healthy
     ports:
       - "${FRONTEND_HOST_PORT}:80"
 
