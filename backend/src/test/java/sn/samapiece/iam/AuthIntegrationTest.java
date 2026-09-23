@@ -282,4 +282,35 @@ class AuthIntegrationTest {
                         .header("Authorization", "Bearer " + accessToken))
                 .andExpect(result -> assertThat(result.getResponse().getStatus()).isNotEqualTo(401));
     }
+
+    @Test
+    void routeProtegee_avecJwtValideMaisRoleInsuffisant_shouldRetourner403() throws Exception {
+        creerAgentActif("PN-2024-00132", Role.AGENT);
+
+        String reponseLogin = mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(loginJson("PN-2024-00132", MOT_DE_PASSE_CLAIR)))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        String accessToken = OBJECT_MAPPER.readTree(reponseLogin).get("accessToken").asText();
+
+        mockMvc.perform(get("/api/v1/agents")
+                        .header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void routeProtegee_avecAccessTokenExpire_shouldRetourner401() throws Exception {
+        Agent agent = creerAgentActif("PN-2024-00133", Role.CHEF_POSTE);
+        Clock horlogeDansLePasse = Clock.fixed(Instant.now().minus(Duration.ofMinutes(20)), ZoneOffset.UTC);
+        JwtService jwtServiceExpire = new JwtService(jwtProperties, horlogeDansLePasse);
+        String accessTokenExpire = jwtServiceExpire.genererAccessToken(
+                agent.getId(), agent.getMatricule(), agent.getRole(), false);
+
+        mockMvc.perform(get("/api/v1/agents")
+                        .header("Authorization", "Bearer " + accessTokenExpire))
+                .andExpect(status().isUnauthorized());
+    }
 }
