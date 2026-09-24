@@ -53,7 +53,13 @@ class PhotoIntegrationTest {
 
     @Container
     static MinIOContainer minio = new MinIOContainer(
-            DockerImageName.parse("quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z")
+            // quay.io/minio/minio et docker.io/minio/minio ne sont plus accessibles anonymement
+            // depuis le changement de politique de distribution de MinIO (2025) : 401 Unauthorized
+            // sur toute image, y compris `latest`. bitnamilegacy/minio (dépôt Bitnami "legacy",
+            // figé, plus d'images publiées depuis leur propre changement de politique) reste
+            // public et expose la même API S3/health-check ; vérifié manuellement (mc mb/cp/cat).
+            DockerImageName.parse(
+                            "bitnamilegacy/minio@sha256:451fe6858cb770cc9d0e77ba811ce287420f781c7c1b806a386f6896471a349c")
                     .asCompatibleSubstituteFor("minio/minio"));
 
     @DynamicPropertySource
