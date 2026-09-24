@@ -68,7 +68,7 @@ describe('RecherchePubliquePage', () => {
     expect(section).not.toHaveTextContent('1234567890');
   });
 
-  it('propose une alerte quand aucun résultat n\'est trouvé', async () => {
+  it("propose une alerte quand aucun résultat n'est trouvé", async () => {
     vi.mocked(fetch).mockResolvedValueOnce({
       ok: true,
       status: 200,
@@ -151,5 +151,92 @@ describe('RecherchePubliquePage', () => {
     expect(
       await screen.findByText('Vérifiez les critères de recherche saisis.'),
     ).toBeInTheDocument();
+  });
+
+  it('gère le cycle 428 -> défi captcha -> réponse -> recherche acceptée (parcours complet)', async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 428,
+        json: async () => ({}),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ captchaToken: 'token-A', question: 'Combien font 2 + 3 ?' }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => RESULTAT_TROUVE_MOCK,
+      } as Response);
+
+    render(<RecherchePubliquePage />);
+    const utilisateur = await remplirChampsRequis();
+    await utilisateur.click(screen.getByRole('button', { name: 'Rechercher' }));
+
+    expect(
+      await screen.findByText(
+        'Vérification supplémentaire requise avant de poursuivre la recherche.',
+      ),
+    ).toBeInTheDocument();
+    expect(await screen.findByText('Combien font 2 + 3 ?')).toBeInTheDocument();
+
+    await utilisateur.type(screen.getByLabelText('Combien font 2 + 3 ?'), '5');
+    await utilisateur.click(screen.getByRole('button', { name: 'Valider' }));
+
+    const section = await screen.findByRole('region', { name: 'Résultat de la recherche' });
+    expect(section).toHaveTextContent('Poste de Dakar-Plateau');
+
+    expect(fetch).toHaveBeenCalledTimes(3);
+    const [, optionsDeuxiemeAppelPost] = vi.mocked(fetch).mock.calls[2];
+    const enTetes = optionsDeuxiemeAppelPost?.headers as Record<string, string>;
+    expect(enTetes['X-Captcha-Token']).toBe('token-A');
+    expect(enTetes['X-Captcha-Reponse']).toBe('5');
+
+    expect(screen.queryByText(/Erreur 428/)).not.toBeInTheDocument();
+  });
+
+  it('affiche un nouveau défi après une réponse incorrecte au captcha (jamais réutilisation du token)', async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 428,
+        json: async () => ({}),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ captchaToken: 'token-A', question: 'Combien font 2 + 3 ?' }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 428,
+        json: async () => ({}),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ captchaToken: 'token-B', question: 'Combien font 4 + 1 ?' }),
+      } as Response);
+
+    render(<RecherchePubliquePage />);
+    const utilisateur = await remplirChampsRequis();
+    await utilisateur.click(screen.getByRole('button', { name: 'Rechercher' }));
+
+    expect(await screen.findByText('Combien font 2 + 3 ?')).toBeInTheDocument();
+
+    await utilisateur.type(screen.getByLabelText('Combien font 2 + 3 ?'), '0');
+    await utilisateur.click(screen.getByRole('button', { name: 'Valider' }));
+
+    expect(
+      await screen.findByText(
+        'Réponse incorrecte ou expirée. Une nouvelle question a été générée.',
+      ),
+    ).toBeInTheDocument();
+    expect(await screen.findByText('Combien font 4 + 1 ?')).toBeInTheDocument();
+    expect(screen.queryByText('Combien font 2 + 3 ?')).not.toBeInTheDocument();
+
+    expect(screen.queryByText(/Erreur 428/)).not.toBeInTheDocument();
   });
 });
