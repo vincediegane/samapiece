@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
-import { rechercher } from './recherchePubliqueApi';
-import type { RecherchePubliqueRequest, RecherchePubliqueResponse } from './types';
+import { CaptchaRequisApiError, obtenirDefiCaptcha, rechercher } from './recherchePubliqueApi';
+import type { CaptchaDefi, RecherchePubliqueRequest, RecherchePubliqueResponse } from './types';
 import { TYPE_DOCUMENT_LABELS } from '../pieces/types';
 import type { TypeDocument } from '../pieces/types';
 import { IconCheck, IconDocument, IconSearch } from '../../shared/icons';
@@ -45,6 +45,21 @@ function RecherchePubliquePage() {
   const [enEnvoi, setEnEnvoi] = useState(false);
   const [resultat, setResultat] = useState<RecherchePubliqueResponse | null>(null);
   const [alerteProposee, setAlerteProposee] = useState(false);
+  const [defiCaptcha, setDefiCaptcha] = useState<CaptchaDefi | null>(null);
+  const [reponseCaptcha, setReponseCaptcha] = useState('');
+  const [payloadEnAttente, setPayloadEnAttente] = useState<RecherchePubliqueRequest | null>(null);
+
+  async function chargerNouveauDefi() {
+    try {
+      const defi = await obtenirDefiCaptcha();
+      setDefiCaptcha(defi);
+      setReponseCaptcha('');
+    } catch {
+      setErreurServeur('Impossible de charger la vérification de sécurité. Réessayez plus tard.');
+      setDefiCaptcha(null);
+      setPayloadEnAttente(null);
+    }
+  }
 
   async function soumettreFormulaire(evenement: FormEvent) {
     evenement.preventDefault();
@@ -54,19 +69,53 @@ function RecherchePubliquePage() {
 
     setErreurServeur(null);
     setEnEnvoi(true);
+    const payload: RecherchePubliqueRequest = {
+      typeDocument: formulaire.typeDocument as TypeDocument,
+      nomTitulaire: formulaire.nomTitulaire.trim(),
+      prenomTitulaire: formulaire.prenomTitulaire.trim() || null,
+      numeroDocument: formulaire.numeroDocument.trim() || null,
+      dateNaissanceTitulaire: formulaire.dateNaissanceTitulaire || null,
+    };
     try {
-      const payload: RecherchePubliqueRequest = {
-        typeDocument: formulaire.typeDocument as TypeDocument,
-        nomTitulaire: formulaire.nomTitulaire.trim(),
-        prenomTitulaire: formulaire.prenomTitulaire.trim() || null,
-        numeroDocument: formulaire.numeroDocument.trim() || null,
-        dateNaissanceTitulaire: formulaire.dateNaissanceTitulaire || null,
-      };
       const reponse = await rechercher(payload);
       setResultat(reponse);
       setAlerteProposee(false);
     } catch (e) {
-      setErreurServeur(e instanceof Error ? e.message : 'Erreur inconnue lors de la recherche.');
+      if (e instanceof CaptchaRequisApiError) {
+        setPayloadEnAttente(payload);
+        setErreurServeur('Vérification supplémentaire requise avant de poursuivre la recherche.');
+        await chargerNouveauDefi();
+      } else {
+        setErreurServeur(e instanceof Error ? e.message : 'Erreur inconnue lors de la recherche.');
+      }
+    } finally {
+      setEnEnvoi(false);
+    }
+  }
+
+  async function soumettreReponseCaptcha(evenement: FormEvent) {
+    evenement.preventDefault();
+    if (!defiCaptcha || !payloadEnAttente) return;
+
+    setErreurServeur(null);
+    setEnEnvoi(true);
+    try {
+      const reponse = await rechercher(payloadEnAttente, {
+        captchaToken: defiCaptcha.captchaToken,
+        captchaReponse: reponseCaptcha.trim(),
+      });
+      setResultat(reponse);
+      setAlerteProposee(false);
+      setDefiCaptcha(null);
+      setReponseCaptcha('');
+      setPayloadEnAttente(null);
+    } catch (e) {
+      if (e instanceof CaptchaRequisApiError) {
+        setErreurServeur('Réponse incorrecte ou expirée. Une nouvelle question a été générée.');
+        await chargerNouveauDefi();
+      } else {
+        setErreurServeur(e instanceof Error ? e.message : 'Erreur inconnue lors de la recherche.');
+      }
     } finally {
       setEnEnvoi(false);
     }
@@ -84,6 +133,28 @@ function RecherchePubliquePage() {
         <p role="alert" className="alert-error">
           {erreurServeur}
         </p>
+      )}
+
+      {defiCaptcha && (
+        <section
+          aria-label="Vérification de sécurité"
+          className="mb-6 rounded-2xl border border-slate-200 bg-white p-7 shadow-sm"
+        >
+          <form onSubmit={soumettreReponseCaptcha} className="flex flex-col gap-5">
+            <label className="field">
+              <span className="field-label">{defiCaptcha.question}</span>
+              <input
+                type="text"
+                className="field-input"
+                value={reponseCaptcha}
+                onChange={(e) => setReponseCaptcha(e.target.value)}
+              />
+            </label>
+            <button type="submit" className="btn-primary self-start" disabled={enEnvoi}>
+              Valider
+            </button>
+          </form>
+        </section>
       )}
 
       {resultat &&
@@ -139,8 +210,8 @@ function RecherchePubliquePage() {
               </p>
             </div>
             <p className="text-sm text-slate-500">
-              Présentez-vous au poste avec une pièce justificative de votre identité pour
-              récupérer votre document.
+              Présentez-vous au poste avec une pièce justificative de votre identité pour récupérer
+              votre document.
             </p>
           </section>
         ) : (
@@ -179,6 +250,7 @@ function RecherchePubliquePage() {
               onChange={(e) =>
                 setFormulaire({ ...formulaire, typeDocument: e.target.value as TypeDocument })
               }
+              disabled={enEnvoi || defiCaptcha !== null}
             >
               <option value="" disabled>
                 Sélectionner un type
@@ -204,6 +276,7 @@ function RecherchePubliquePage() {
             className="field-input"
             value={formulaire.nomTitulaire}
             onChange={(e) => setFormulaire({ ...formulaire, nomTitulaire: e.target.value })}
+            disabled={enEnvoi || defiCaptcha !== null}
           />
         </label>
         {erreursValidation.nomTitulaire && (
@@ -219,6 +292,7 @@ function RecherchePubliquePage() {
             className="field-input"
             value={formulaire.prenomTitulaire}
             onChange={(e) => setFormulaire({ ...formulaire, prenomTitulaire: e.target.value })}
+            disabled={enEnvoi || defiCaptcha !== null}
           />
         </label>
 
@@ -229,6 +303,7 @@ function RecherchePubliquePage() {
             className="field-input"
             value={formulaire.numeroDocument}
             onChange={(e) => setFormulaire({ ...formulaire, numeroDocument: e.target.value })}
+            disabled={enEnvoi || defiCaptcha !== null}
           />
         </label>
 
@@ -241,6 +316,7 @@ function RecherchePubliquePage() {
             onChange={(e) =>
               setFormulaire({ ...formulaire, dateNaissanceTitulaire: e.target.value })
             }
+            disabled={enEnvoi || defiCaptcha !== null}
           />
         </label>
         {erreursValidation.discriminant && (
@@ -252,7 +328,7 @@ function RecherchePubliquePage() {
         <button
           type="submit"
           className="btn-primary flex items-center gap-2 self-start"
-          disabled={enEnvoi}
+          disabled={enEnvoi || defiCaptcha !== null}
         >
           <IconSearch width={16} height={16} />
           Rechercher
