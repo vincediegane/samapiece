@@ -53,8 +53,20 @@ class PhotoIntegrationTest {
 
     @Container
     static MinIOContainer minio = new MinIOContainer(
-            DockerImageName.parse("quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z")
-                    .asCompatibleSubstituteFor("minio/minio"));
+                    // quay.io/minio/minio et docker.io/minio/minio ne sont plus accessibles
+                    // anonymement depuis le changement de politique de distribution de MinIO
+                    // (2025) : 401 Unauthorized sur toute image, y compris `latest`.
+                    // bitnamilegacy/minio (dépôt Bitnami "legacy", figé) reste public et expose la
+                    // même API S3/health-check ; vérifié manuellement (mc mb/cp/cat).
+                    DockerImageName.parse(
+                                    "bitnamilegacy/minio@sha256:451fe6858cb770cc9d0e77ba811ce287420f781c7c1b806a386f6896471a349c")
+                            .asCompatibleSubstituteFor("minio/minio"))
+            // L'image Bitnami tourne par défaut en UID 1001 (non-root) et échoue avec
+            // "FATAL Unable to initialize backend: file access denied" sur son volume déclaré
+            // (/bitnami/minio/data), y compris sur un conteneur Testcontainers éphémère sans
+            // volume externe (confirmé en CI). `user: root` lève cette restriction, comme pour le
+            // service équivalent dans docker-compose.yml.
+            .withCreateContainerCmdModifier(cmd -> cmd.withUser("root"));
 
     @DynamicPropertySource
     static void proprietesMinio(DynamicPropertyRegistry registry) {

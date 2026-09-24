@@ -39,6 +39,10 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       SENTRY_DSN: ${SENTRY_DSN}
+      BOOTSTRAP_ADMIN_ENABLED: ${BOOTSTRAP_ADMIN_ENABLED}
+      BOOTSTRAP_ADMIN_MATRICULE: ${BOOTSTRAP_ADMIN_MATRICULE}
+      BOOTSTRAP_ADMIN_NOM: ${BOOTSTRAP_ADMIN_NOM}
+      BOOTSTRAP_ADMIN_POSTE_ID: ${BOOTSTRAP_ADMIN_POSTE_ID}
     depends_on:
       minio:
         condition: service_healthy
@@ -109,7 +113,14 @@ services:
       retries: 5
 
   minio:
-    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+    # quay.io/minio/minio et docker.io/minio/minio ne sont plus accessibles anonymement depuis le
+    # changement de politique de distribution de MinIO (2025) : 401 Unauthorized sur toute image, y
+    # compris `latest`. bitnamilegacy/minio (depot Bitnami "legacy", fige, toujours public) expose
+    # la meme API S3 et le meme healthcheck (`mc ready`) ; verifie manuellement. `user: root` requis
+    # sinon l'utilisateur non-root de l'image Bitnami n'a pas les droits d'ecriture sur le volume
+    # nomme minio_data (verifie manuellement : echec "file access denied" sans cette ligne).
+    image: bitnamilegacy/minio@sha256:451fe6858cb770cc9d0e77ba811ce287420f781c7c1b806a386f6896471a349c
+    user: root
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
