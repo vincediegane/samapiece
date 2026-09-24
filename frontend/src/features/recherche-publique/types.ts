@@ -21,3 +21,13 @@ export interface RecherchePubliqueResponse {
   poste: PosteResume | null;
   referenceDossier: string | null;
 }
+
+export interface CaptchaDefi {
+  captchaToken: string;
+  question: string;
+}
+
+export interface CaptchaReponsePayload {
+  captchaToken: string;
+  captchaReponse: string;
+}
