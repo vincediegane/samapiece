@@ -2,6 +2,7 @@ import { useState } from 'react';
 import AgentsPage from '../features/agents/AgentsPage';
 import DashboardPage from '../features/dashboard/DashboardPage';
 import EnregistrementPiecePage from '../features/pieces/EnregistrementPiecePage';
+import ConsulterFichePage from '../features/pieces/ConsulterFichePage';
 import RecherchePubliquePage from '../features/recherche-publique/RecherchePubliquePage';
 import HomePage from '../features/home/HomePage';
 import LoginPage from '../features/auth/LoginPage';
@@ -12,7 +13,7 @@ import type { OngletAgent } from '../shared/layout/AgentShell';
 
 type Onglet = 'accueil' | 'recherche' | 'connexion' | OngletAgent;
 
-const ONGLETS_AGENT: OngletAgent[] = ['pieces', 'dashboard', 'agents'];
+const ONGLETS_AGENT: OngletAgent[] = ['pieces', 'fiche', 'dashboard', 'agents'];
 
 function estOngletAgent(onglet: Onglet): onglet is OngletAgent {
   return (ONGLETS_AGENT as Onglet[]).includes(onglet);
@@ -38,6 +39,7 @@ function App() {
         onDeconnexion={() => setOnglet('connexion')}
       >
         {onglet === 'pieces' && <EnregistrementPiecePage />}
+        {onglet === 'fiche' && <ConsulterFichePage />}
         {onglet === 'dashboard' && <DashboardPage />}
         {onglet === 'agents' && <AgentsPage />}
       </AgentShell>

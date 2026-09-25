@@ -5,9 +5,16 @@ import type { AgentCourant } from '../../features/dashboard/types';
 import { listerFile } from '../offline/fileSynchronisation';
 import { viderSession } from '../../features/auth/session';
 import { useRafraichissementSession } from '../../features/auth/useRafraichissementSession';
-import { IconChart, IconCloudSync, IconDocument, IconLogout, IconUsers } from '../icons';
+import {
+  IconChart,
+  IconCloudSync,
+  IconDocument,
+  IconLogout,
+  IconSearch,
+  IconUsers,
+} from '../icons';
 
-export type OngletAgent = 'pieces' | 'dashboard' | 'agents';
+export type OngletAgent = 'pieces' | 'fiche' | 'dashboard' | 'agents';
 
 interface AgentShellProps {
   actif: OngletAgent;
@@ -95,6 +102,14 @@ function AgentShell({
           >
             <IconDocument width={18} height={18} />
             Enregistrement
+          </button>
+          <button
+            type="button"
+            className={actif === 'fiche' ? 'sidebar-link-active' : 'sidebar-link'}
+            onClick={() => onNaviguer('fiche')}
+          >
+            <IconSearch width={18} height={18} />
+            Ouvrir une fiche
           </button>
           <button
             type="button"
