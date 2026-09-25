@@ -125,6 +125,8 @@ services:
         value: "http://localhost:1" # pas de passerelle SMS reelle pour la demo, cf. .env.example dev
       - key: SMS_API_KEY
         sync: false
+      - key: SMS_SENDER_ID
+        value: SamaPiece
       - key: MINIO_ACCESS_KEY
         sync: false # meme valeur que MINIO_ROOT_USER (duplication assumee, cf. en-tete)
       - key: MINIO_SECRET_KEY
