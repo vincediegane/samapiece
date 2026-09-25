@@ -3,6 +3,10 @@ spring:
     url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}
     username: ${DB_USER}
     password: ${DB_PASSWORD}
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT:6379}
 
 samapiece:
   minio:
@@ -10,6 +14,10 @@ samapiece:
     access-key: ${MINIO_ACCESS_KEY}
     secret-key: ${MINIO_SECRET_KEY}
     bucket-photos: ${MINIO_BUCKET_PHOTOS}
+  meilisearch:
+    host: ${MEILISEARCH_HOST}
+    api-key: ${MEILISEARCH_API_KEY}
+    index-pieces: ${MEILISEARCH_INDEX_PIECES}
 
 logging:
   level:

@@ -65,6 +65,7 @@ services:
     image: samapiece-frontend:dev
     environment:
       SERVER_PORT: ${SERVER_PORT}
+      BACKEND_HOST: backend
     depends_on:
       backend:
         condition: service_healthy
