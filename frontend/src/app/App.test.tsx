@@ -61,6 +61,21 @@ describe('App — espace agent et session', () => {
     expect(screen.queryByLabelText('Matricule')).not.toBeInTheDocument();
   });
 
+  it('affiche ConsulterFichePage lors de la navigation vers l’onglet "fiche"', async () => {
+    window.localStorage.setItem('samapiece.accessToken', 'access-1');
+    window.localStorage.setItem('samapiece.refreshToken', 'refresh-1');
+    window.localStorage.setItem('samapiece.accessTokenExpiresAt', String(Date.now() + 900_000));
+
+    render(<App />);
+    await clicSurEspaceAgent();
+    await screen.findByLabelText('Type de document');
+
+    const utilisateur = userEvent.setup();
+    await utilisateur.click(screen.getByRole('button', { name: 'Ouvrir une fiche' }));
+
+    expect(await screen.findByLabelText('Identifiant de la fiche (UUID)')).toBeInTheDocument();
+  });
+
   it('ramène à LoginPage après déconnexion depuis la sidebar agent', async () => {
     window.localStorage.setItem('samapiece.accessToken', 'access-1');
     window.localStorage.setItem('samapiece.refreshToken', 'refresh-1');

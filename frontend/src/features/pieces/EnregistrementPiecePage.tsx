@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { creerPiece, PieceApiError } from './piecesApi';
 import type { CreerPieceRequest, EtatDocumentOption, PieceResponse, TypeDocument } from './types';
 import { ETAT_DOCUMENT_OPTIONS, TYPE_DOCUMENT_LABELS } from './types';
 import { mettreEnFile } from '../../shared/offline/fileSynchronisation';
 import FileAttenteSynchronisation from './FileAttenteSynchronisation';
+import FichePieceCard from './FichePieceCard';
+import { recupererAgentCourant } from '../dashboard/dashboardApi';
 import { IconCheck, IconDocument } from '../../shared/icons';
 
 type ChampRequis =
@@ -51,6 +53,13 @@ function EnregistrementPiecePage() {
   const [messageMiseEnFile, setMessageMiseEnFile] = useState<string | null>(null);
   const [enEnvoi, setEnEnvoi] = useState(false);
   const [recu, setRecu] = useState<PieceResponse | null>(null);
+  const [roleAgentCourant, setRoleAgentCourant] = useState<string | null>(null);
+
+  useEffect(() => {
+    recupererAgentCourant()
+      .then((a) => setRoleAgentCourant(a.role))
+      .catch(() => setRoleAgentCourant(null));
+  }, []);
 
   async function soumettreFormulaire(evenement: FormEvent) {
     evenement.preventDefault();
@@ -262,49 +271,11 @@ function EnregistrementPiecePage() {
                 </span>
                 <h2 className="text-[15px] font-bold text-primary-700">Fiche enregistrée</h2>
               </div>
-              <div className="flex flex-col gap-3">
-                <p>
-                  <span className="block text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                    N° de fiche
-                  </span>
-                  <strong className="text-base font-bold text-slate-900">
-                    {recu.numeroFiche}
-                  </strong>
-                </p>
-                <p>
-                  <span className="block text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                    Type de document
-                  </span>
-                  {TYPE_DOCUMENT_LABELS[recu.typeDocument as TypeDocument] ?? recu.typeDocument}
-                </p>
-                <p>
-                  <span className="block text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                    Titulaire
-                  </span>
-                  {recu.prenomTitulaire} {recu.nomTitulaire}
-                </p>
-                <p>
-                  <span className="block text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                    Numéro de document
-                  </span>
-                  {recu.numeroDocumentMasque}
-                </p>
-                <p>
-                  <span className="block text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                    Date de dépôt
-                  </span>
-                  {recu.dateDepot}
-                </p>
-                <p>
-                  <span className="block text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                    Statut
-                  </span>
-                  <span className="inline-flex items-center gap-1.5 font-semibold text-primary-700">
-                    <span className="badge-dot bg-primary-500" />
-                    {recu.statut}
-                  </span>
-                </p>
-              </div>
+              <FichePieceCard
+                piece={recu}
+                roleAgentCourant={roleAgentCourant}
+                onMisAJour={setRecu}
+              />
             </section>
           ) : (
             <section className="rounded-2xl border border-slate-200 bg-white p-6">

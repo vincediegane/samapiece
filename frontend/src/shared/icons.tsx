@@ -136,6 +136,17 @@ export function IconChevronLeft(props: IconProps = {}) {
   return icone(<polyline points="15 18 9 12 15 6" />, { strokeWidth: 2.2, ...props });
 }
 
+export function IconDownload(props: IconProps = {}) {
+  return icone(
+    <>
+      <path d="M12 3v12" />
+      <polyline points="7 10 12 15 17 10" />
+      <path d="M5 21h14" />
+    </>,
+    props,
+  );
+}
+
 export function IconKey(props: IconProps = {}) {
   return icone(
     <>
