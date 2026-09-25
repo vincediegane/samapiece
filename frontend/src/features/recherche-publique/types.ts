@@ -31,3 +31,16 @@ export interface CaptchaReponsePayload {
   captchaToken: string;
   captchaReponse: string;
 }
+
+export interface CreerAlerteRequest {
+  typeDocument: TypeDocument | null;
+  nomTitulaire: string;
+  prenomTitulaire: string | null;
+  numeroDocument: string | null;
+  dateNaissanceTitulaire: string | null;
+  contact: string;
+}
+
+export interface CreerAlerteResponse {
+  message: string;
+}

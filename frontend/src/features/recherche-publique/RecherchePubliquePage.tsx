@@ -1,6 +1,12 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
-import { CaptchaRequisApiError, obtenirDefiCaptcha, rechercher } from './recherchePubliqueApi';
+import {
+  AlerteApiError,
+  CaptchaRequisApiError,
+  creerAlerte,
+  obtenirDefiCaptcha,
+  rechercher,
+} from './recherchePubliqueApi';
 import type { CaptchaDefi, RecherchePubliqueRequest, RecherchePubliqueResponse } from './types';
 import { TYPE_DOCUMENT_LABELS } from '../pieces/types';
 import type { TypeDocument } from '../pieces/types';
@@ -45,9 +51,21 @@ function RecherchePubliquePage() {
   const [enEnvoi, setEnEnvoi] = useState(false);
   const [resultat, setResultat] = useState<RecherchePubliqueResponse | null>(null);
   const [alerteProposee, setAlerteProposee] = useState(false);
+  const [contactAlerte, setContactAlerte] = useState('');
+  const [enEnvoiAlerte, setEnEnvoiAlerte] = useState(false);
+  const [erreurAlerte, setErreurAlerte] = useState<string | null>(null);
+  const [confirmationAlerte, setConfirmationAlerte] = useState<string | null>(null);
   const [defiCaptcha, setDefiCaptcha] = useState<CaptchaDefi | null>(null);
   const [reponseCaptcha, setReponseCaptcha] = useState('');
   const [payloadEnAttente, setPayloadEnAttente] = useState<RecherchePubliqueRequest | null>(null);
+
+  function reinitialiserAlerte() {
+    setAlerteProposee(false);
+    setContactAlerte('');
+    setEnEnvoiAlerte(false);
+    setErreurAlerte(null);
+    setConfirmationAlerte(null);
+  }
 
   async function chargerNouveauDefi() {
     try {
@@ -79,7 +97,7 @@ function RecherchePubliquePage() {
     try {
       const reponse = await rechercher(payload);
       setResultat(reponse);
-      setAlerteProposee(false);
+      reinitialiserAlerte();
     } catch (e) {
       if (e instanceof CaptchaRequisApiError) {
         setPayloadEnAttente(payload);
@@ -105,7 +123,7 @@ function RecherchePubliquePage() {
         captchaReponse: reponseCaptcha.trim(),
       });
       setResultat(reponse);
-      setAlerteProposee(false);
+      reinitialiserAlerte();
       setDefiCaptcha(null);
       setReponseCaptcha('');
       setPayloadEnAttente(null);
@@ -118,6 +136,36 @@ function RecherchePubliquePage() {
       }
     } finally {
       setEnEnvoi(false);
+    }
+  }
+
+  async function soumettreAlerte(evenement: FormEvent) {
+    evenement.preventDefault();
+    if (!contactAlerte.trim()) {
+      setErreurAlerte('Le numéro de téléphone est requis.');
+      return;
+    }
+
+    setErreurAlerte(null);
+    setEnEnvoiAlerte(true);
+    try {
+      const reponse = await creerAlerte({
+        typeDocument: formulaire.typeDocument as TypeDocument,
+        nomTitulaire: formulaire.nomTitulaire.trim(),
+        prenomTitulaire: formulaire.prenomTitulaire.trim() || null,
+        numeroDocument: formulaire.numeroDocument.trim() || null,
+        dateNaissanceTitulaire: formulaire.dateNaissanceTitulaire || null,
+        contact: contactAlerte.trim(),
+      });
+      setConfirmationAlerte(reponse.message);
+    } catch (e) {
+      setErreurAlerte(
+        e instanceof AlerteApiError || e instanceof Error
+          ? e.message
+          : "Erreur inconnue lors de la création de l'alerte.",
+      );
+    } finally {
+      setEnEnvoiAlerte(false);
     }
   }
 
@@ -222,8 +270,33 @@ function RecherchePubliquePage() {
             <p className="mb-3">
               Aucune pièce correspondant à ces critères n&apos;a été retrouvée.
             </p>
-            {alerteProposee ? (
-              <p>Cette fonctionnalité arrive bientôt.</p>
+            {confirmationAlerte ? (
+              <p>{confirmationAlerte}</p>
+            ) : alerteProposee ? (
+              <form onSubmit={soumettreAlerte} className="flex flex-col gap-3">
+                <label className="field">
+                  <span className="field-label">Téléphone</span>
+                  <input
+                    type="tel"
+                    className="field-input"
+                    value={contactAlerte}
+                    onChange={(e) => setContactAlerte(e.target.value)}
+                    disabled={enEnvoiAlerte}
+                  />
+                </label>
+                {erreurAlerte && (
+                  <span role="alert" className="field-error">
+                    {erreurAlerte}
+                  </span>
+                )}
+                <button
+                  type="submit"
+                  className="btn-outline self-start"
+                  disabled={enEnvoiAlerte}
+                >
+                  Confirmer l&apos;alerte
+                </button>
+              </form>
             ) : (
               <button type="button" className="btn-outline" onClick={() => setAlerteProposee(true)}>
                 Recevoir une alerte si cette pièce est déposée
