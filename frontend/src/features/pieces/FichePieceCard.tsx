@@ -25,6 +25,8 @@ function FichePieceCard({ piece, roleAgentCourant, onMisAJour }: FichePieceCardP
 
   const statut = piece.statut as StatutPiece;
   const peutRetirerOuSignaler = STATUTS_RETRAIT_SIGNALEMENT.includes(piece.statut);
+  // ADMIN_REGIONAL/ADMIN_NATIONAL restent autorisés côté API (POST /debloquer) mais n'ont
+  // volontairement aucun parcours UI ici : limitation assumée, cf. spec #63 "Écarts identifiés".
   const peutDebloquer =
     roleAgentCourant === 'CHEF_POSTE' && STATUTS_DEBLOCAGE.includes(piece.statut);
 
