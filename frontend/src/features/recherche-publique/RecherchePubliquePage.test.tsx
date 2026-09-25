@@ -84,7 +84,147 @@ describe('RecherchePubliquePage', () => {
     });
     await utilisateur.click(bouton);
 
-    expect(await screen.findByText('Cette fonctionnalité arrive bientôt.')).toBeInTheDocument();
+    expect(await screen.findByLabelText('Téléphone')).toBeInTheDocument();
+    expect(screen.queryByText('Cette fonctionnalité arrive bientôt.')).not.toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('crée une alerte avec succès et affiche la confirmation', async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => RESULTAT_NON_TROUVE_MOCK,
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 201,
+        json: async () => ({
+          message: 'Alerte enregistrée. Un lien de désinscription a été envoyé par SMS.',
+        }),
+      } as Response);
+
+    render(<RecherchePubliquePage />);
+    const utilisateur = await remplirChampsRequis();
+    await utilisateur.click(screen.getByRole('button', { name: 'Rechercher' }));
+
+    const bouton = await screen.findByRole('button', {
+      name: 'Recevoir une alerte si cette pièce est déposée',
+    });
+    await utilisateur.click(bouton);
+
+    await utilisateur.type(await screen.findByLabelText('Téléphone'), '771234567');
+    await utilisateur.click(screen.getByRole('button', { name: "Confirmer l'alerte" }));
+
+    expect(
+      await screen.findByText('Alerte enregistrée. Un lien de désinscription a été envoyé par SMS.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText('Téléphone')).not.toBeInTheDocument();
+
+    expect(fetch).toHaveBeenCalledTimes(2);
+    const [urlDeuxiemeAppel, optionsDeuxiemeAppel] = vi.mocked(fetch).mock.calls[1];
+    expect(urlDeuxiemeAppel).toBe('/api/v1/alertes');
+    const corps = JSON.parse((optionsDeuxiemeAppel?.body as string) ?? '{}');
+    expect(corps).toMatchObject({
+      typeDocument: 'CNI',
+      nomTitulaire: 'Diop',
+      numeroDocument: '1234567890',
+      contact: '771234567',
+    });
+  });
+
+  it('affiche l\'erreur métier renvoyée par l\'API en cas de critères insuffisants', async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => RESULTAT_NON_TROUVE_MOCK,
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        json: async () => ({
+          code: 'CRITERES_INSUFFISANTS',
+          message:
+            'Critères de recherche insuffisants : type, nom, et numéro ou date de naissance sont requis.',
+        }),
+      } as Response);
+
+    render(<RecherchePubliquePage />);
+    const utilisateur = await remplirChampsRequis();
+    await utilisateur.click(screen.getByRole('button', { name: 'Rechercher' }));
+
+    const bouton = await screen.findByRole('button', {
+      name: 'Recevoir une alerte si cette pièce est déposée',
+    });
+    await utilisateur.click(bouton);
+
+    await utilisateur.type(await screen.findByLabelText('Téléphone'), '771234567');
+    await utilisateur.click(screen.getByRole('button', { name: "Confirmer l'alerte" }));
+
+    expect(
+      await screen.findByText(
+        'Critères de recherche insuffisants : type, nom, et numéro ou date de naissance sont requis.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText('Téléphone')).toBeInTheDocument();
+    expect(screen.queryByText('Erreur inconnue lors de la recherche.')).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('region', { name: 'Aucun résultat' }),
+    ).toBeInTheDocument();
+  });
+
+  it("affiche l'erreur métier renvoyée par l'API en cas de contact invalide", async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => RESULTAT_NON_TROUVE_MOCK,
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        json: async () => ({
+          code: 'CONTACT_INVALIDE',
+          message: 'Le contact fourni est invalide.',
+        }),
+      } as Response);
+
+    render(<RecherchePubliquePage />);
+    const utilisateur = await remplirChampsRequis();
+    await utilisateur.click(screen.getByRole('button', { name: 'Rechercher' }));
+
+    const bouton = await screen.findByRole('button', {
+      name: 'Recevoir une alerte si cette pièce est déposée',
+    });
+    await utilisateur.click(bouton);
+
+    await utilisateur.type(await screen.findByLabelText('Téléphone'), 'abc');
+    await utilisateur.click(screen.getByRole('button', { name: "Confirmer l'alerte" }));
+
+    expect(await screen.findByText('Le contact fourni est invalide.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Téléphone')).toBeInTheDocument();
+  });
+
+  it("bloque la soumission du formulaire d'alerte si le téléphone est vide", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => RESULTAT_NON_TROUVE_MOCK,
+    } as Response);
+
+    render(<RecherchePubliquePage />);
+    const utilisateur = await remplirChampsRequis();
+    await utilisateur.click(screen.getByRole('button', { name: 'Rechercher' }));
+
+    const bouton = await screen.findByRole('button', {
+      name: 'Recevoir une alerte si cette pièce est déposée',
+    });
+    await utilisateur.click(bouton);
+
+    await utilisateur.click(screen.getByRole('button', { name: "Confirmer l'alerte" }));
+
+    expect(screen.getByText('Le numéro de téléphone est requis.')).toBeInTheDocument();
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
