@@ -1,0 +1,223 @@
+# Blueprint Render pour la stack complete SamaPiece (demo/suivi client, ticket #77).
+#
+# Ce fichier decrit l'intention de deploiement ; il n'a jamais ete applique contre un
+# compte Render reel par ce pipeline (aucun acces a un tel compte). Chaque point marque
+# "(hypothese a confirmer au deploiement manuel)" doit etre verifie/ajuste lors du premier
+# "Deploy Blueprint" par un humain avant de considerer ce fichier comme valide en pratique.
+#
+# Aucune valeur de secret n'est ecrite en clair ici : tout champ sensible utilise
+# `sync: false` (saisie manuelle obligatoire dans le dashboard Render au moment du
+# deploiement), soit dans l'envVarGroup `samapiece-secrets`, soit directement sur le
+# service qui le consomme quand le nom de variable attendu differe entre services (ex.
+# MINIO_ROOT_USER pour le pserv MinIO vs MINIO_ACCESS_KEY attendu par le backend) : Render
+# ne semble pas offrir de mecanisme pour renommer une cle importee d'un envVarGroup, donc
+# ce fichier duplique deliberement la meme valeur secrete sous deux noms plutot que
+# d'inventer une syntaxe d'alias non certaine.
+
+envVarGroups:
+  - name: samapiece-secrets
+    envVars:
+      - key: JWT_SECRET
+        sync: false
+      - key: PHOTO_CLE_CHIFFREMENT
+        sync: false
+      - key: ALERTE_CLE_CHIFFREMENT
+        sync: false
+      - key: SMS_API_KEY
+        sync: false
+      - key: MEILI_MASTER_KEY
+        sync: false
+      - key: MINIO_ROOT_USER
+        sync: false
+      - key: MINIO_ROOT_PASSWORD
+        sync: false
+      - key: RABBITMQ_DEFAULT_USER
+        sync: false
+      - key: RABBITMQ_DEFAULT_PASS
+        sync: false
+      - key: BOOTSTRAP_ADMIN_MATRICULE
+        sync: false
+      - key: BOOTSTRAP_ADMIN_NOM
+        sync: false
+      - key: BOOTSTRAP_ADMIN_POSTE_ID
+        sync: false
+
+databases:
+  - name: samapiece-db
+    # (hypothese a confirmer au deploiement manuel) : cle `plan` et valeur exacte (ex.
+    # "starter") a choisir/verifier dans le dashboard. Un plan payant est indispensable :
+    # les tiers gratuits Postgres Render ont une duree de vie limitee, incompatible avec
+    # une URL demo stable (cf. README).
+    plan: starter
+    databaseName: samapiece
+    user: samapiece
+
+services:
+  # --- Redis managé (Render "Key Value") ---
+  - type: redis
+    # (hypothese a confirmer au deploiement manuel) : la cle Blueprint exacte du service
+    # managé Redis/Key Value pourrait differer de `type: redis` selon la version du schema
+    # Render au moment du deploiement reel.
+    name: samapiece-redis
+    plan: starter # (hypothese a confirmer au deploiement manuel)
+    ipAllowList: [] # pas d'acces externe, uniquement inter-services internes
+
+  # --- Backend ---
+  - type: web
+    name: samapiece-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: starter # (hypothese a confirmer au deploiement manuel)
+    healthCheckPath: /actuator/health
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: staging
+      - key: SERVER_PORT
+        # (hypothese a confirmer au deploiement manuel) : Render detecte le port expose
+        # via `EXPOSE 8080` du Dockerfile pour un service `runtime: docker`, sans variable
+        # `PORT` imposee comme sur les runtimes natifs.
+        value: "8080"
+      - key: DB_HOST
+        fromDatabase: { name: samapiece-db, property: host }
+      - key: DB_PORT
+        fromDatabase: { name: samapiece-db, property: port }
+      - key: DB_NAME
+        fromDatabase: { name: samapiece-db, property: database }
+      - key: DB_USER
+        fromDatabase: { name: samapiece-db, property: user }
+      - key: DB_PASSWORD
+        fromDatabase: { name: samapiece-db, property: password }
+      - key: REDIS_HOST
+        fromService: { type: redis, name: samapiece-redis, property: host }
+      - key: REDIS_PORT
+        fromService: { type: redis, name: samapiece-redis, property: port }
+      - key: MEILISEARCH_HOST
+        # (hypothese a confirmer au deploiement manuel) : nom du pserv Meilisearch
+        # utilisable tel quel comme hostname interne sur le reseau prive regional Render ;
+        # a defaut, remplacer par `fromService: { type: pserv, name: samapiece-meilisearch,
+        # property: host }`.
+        value: "http://samapiece-meilisearch:7700"
+      - fromGroup: samapiece-secrets
+      - key: MEILISEARCH_API_KEY
+        # Render ne supporte pas d'interpolation de variable dans une valeur `value:`
+        # (`"${MEILI_MASTER_KEY}"` ne fonctionnerait pas) : solution de repli retenue,
+        # cette cle est saisie manuellement dans le dashboard avec la meme valeur secrete
+        # que MEILI_MASTER_KEY (duplication assumee, cf. en-tete de ce fichier).
+        sync: false
+      - key: MEILISEARCH_INDEX_PIECES
+        value: pieces
+      - key: MINIO_ENDPOINT
+        value: "http://samapiece-minio:9000" # (hypothese a confirmer, meme remarque que MEILISEARCH_HOST)
+      - key: MINIO_BUCKET_PHOTOS
+        value: samapiece-photos-demo
+      - key: RABBITMQ_HOST
+        value: samapiece-rabbitmq # (hypothese a confirmer, meme remarque que MEILISEARCH_HOST)
+      - key: RABBITMQ_PORT
+        value: "5672"
+      - key: JWT_SECRET
+        sync: false
+      - key: PHOTO_CLE_CHIFFREMENT
+        sync: false
+      - key: ALERTE_CLE_CHIFFREMENT
+        sync: false
+      - key: SMS_API_ENDPOINT
+        value: "http://localhost:1" # pas de passerelle SMS reelle pour la demo, cf. .env.example dev
+      - key: SMS_API_KEY
+        sync: false
+      - key: MINIO_ACCESS_KEY
+        sync: false # meme valeur que MINIO_ROOT_USER (duplication assumee, cf. en-tete)
+      - key: MINIO_SECRET_KEY
+        sync: false # meme valeur que MINIO_ROOT_PASSWORD (duplication assumee, cf. en-tete)
+      - key: RABBITMQ_USER
+        sync: false # meme valeur que RABBITMQ_DEFAULT_USER (duplication assumee, cf. en-tete)
+      - key: RABBITMQ_PASSWORD
+        sync: false # meme valeur que RABBITMQ_DEFAULT_PASS (duplication assumee, cf. en-tete)
+      - key: BOOTSTRAP_ADMIN_ENABLED
+        # Ne desactiver ("false") qu'apres le tout premier demarrage reussi sur une base
+        # vide (cf. README section Render + backend/README.md "Bootstrap du premier compte
+        # administrateur") ; laisser a "true" ne recree jamais de doublon (mecanisme
+        # idempotent) mais ce n'est pas une raison de le laisser active indefiniment.
+        value: "true"
+      - key: BOOTSTRAP_ADMIN_MATRICULE
+        sync: false
+      - key: BOOTSTRAP_ADMIN_NOM
+        sync: false
+      - key: BOOTSTRAP_ADMIN_POSTE_ID
+        sync: false
+
+  # --- Frontend ---
+  - type: web
+    name: samapiece-frontend
+    runtime: docker
+    dockerfilePath: ./frontend/Dockerfile
+    dockerContext: ./frontend
+    plan: starter # (hypothese a confirmer au deploiement manuel)
+    envVars:
+      - key: SERVER_PORT
+        value: "8080" # doit correspondre au port reellement ecoute par samapiece-backend
+      - key: BACKEND_HOST
+        fromService: { type: web, name: samapiece-backend, property: host }
+
+  # --- Meilisearch (Private Service) ---
+  - type: pserv
+    name: samapiece-meilisearch
+    # (hypothese a confirmer au deploiement manuel) : `runtime: image` avec `image.url`
+    # pointant vers l'image Docker Hub officielle est la forme utilisee ici, par analogie
+    # avec minio/rabbitmq ci-dessous ; le schema Blueprint documente aussi potentiellement
+    # `runtime: docker` + image officielle directement en `dockerfilePath` absent — a
+    # verifier au deploiement.
+    runtime: image
+    image:
+      url: docker.io/getmeili/meilisearch:v1.10
+    plan: starter # (hypothese a confirmer au deploiement manuel)
+    envVars:
+      - key: MEILI_MASTER_KEY
+        sync: false
+      - key: MEILI_NO_ANALYTICS
+        value: "true"
+    disk:
+      name: meili-data
+      mountPath: /meili_data
+      sizeGB: 1
+
+  # --- MinIO (Private Service) ---
+  - type: pserv
+    name: samapiece-minio
+    # (hypothese a confirmer au deploiement manuel) : capacite `runtime: image` pour un
+    # `pserv` base sur une image Docker Hub tierce.
+    runtime: image
+    image:
+      url: docker.io/bitnamilegacy/minio@sha256:451fe6858cb770cc9d0e77ba811ce287420f781c7c1b806a386f6896471a349c
+    plan: starter # (hypothese a confirmer au deploiement manuel)
+    envVars:
+      - key: MINIO_ROOT_USER
+        sync: false
+      - key: MINIO_ROOT_PASSWORD
+        sync: false
+    disk:
+      name: minio-data
+      mountPath: /data
+      sizeGB: 1
+    # (hypothese a confirmer au deploiement manuel) : la commande de demarrage
+    # `server /data --console-address ":9001"` et `user: root` (necessaires en
+    # docker-compose, voir commentaire dedie dans docker-compose.yml sur l'image Bitnami
+    # legacy) doivent etre reproduits via une cle Blueprint equivalente (type
+    # `dockerCommand`/`command`) dont la syntaxe exacte n'est pas certaine ici. Solution de
+    # repli documentee dans le README si cette cle n'existe pas : un Dockerfile minimal
+    # `FROM <image>` avec `USER root`/`CMD` explicites, hors perimetre de ce fichier tant
+    # que non confirme necessaire.
+
+  # --- RabbitMQ (Private Service) ---
+  - type: pserv
+    name: samapiece-rabbitmq
+    # (hypothese a confirmer au deploiement manuel), meme remarque que samapiece-minio.
+    runtime: image
+    image:
+      url: docker.io/library/rabbitmq:3-management-alpine
+    plan: starter # (hypothese a confirmer au deploiement manuel)
+    envVars:
+      - key: RABBITMQ_DEFAULT_USER
+        sync: false
+      - key: RABBITMQ_DEFAULT_PASS
+        sync: false
