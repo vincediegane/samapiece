@@ -54,3 +54,48 @@ export interface PieceResponse {
   remarques: string | null;
   creeLe: string;
 }
+
+export type StatutPiece =
+  | 'DISPONIBLE'
+  | 'RECLAMEE'
+  | 'RETIREE'
+  | 'LITIGE'
+  | 'ARCHIVEE'
+  | 'DETRUITE'
+  | 'SIGNALEE';
+
+export const STATUT_PIECE_LABELS: Record<StatutPiece, string> = {
+  DISPONIBLE: 'Disponible',
+  RECLAMEE: 'Réclamée',
+  RETIREE: 'Retirée',
+  LITIGE: 'En litige',
+  ARCHIVEE: 'Archivée',
+  DETRUITE: 'Détruite',
+  SIGNALEE: 'Signalée',
+};
+
+export const STATUT_PIECE_COULEURS: Record<StatutPiece, string> = {
+  DISPONIBLE: 'bg-primary-500',
+  RECLAMEE: 'bg-info-500',
+  RETIREE: 'bg-slate-400',
+  LITIGE: 'bg-danger-500',
+  SIGNALEE: 'bg-accent-500',
+  ARCHIVEE: 'bg-slate-600',
+  DETRUITE: 'bg-slate-700',
+};
+
+export interface RetraitRequest {
+  nomReclamant: string;
+  pieceJustificativePresentee: string;
+}
+
+export type StatutCibleSignalement = 'LITIGE' | 'SIGNALEE';
+
+export interface SignalerRequest {
+  statutCible: StatutCibleSignalement;
+  motif: string;
+}
+
+export interface DeblocageRequest {
+  motif: string;
+}
