@@ -54,4 +54,25 @@ describe('AgentShell', () => {
     expect(window.localStorage.getItem('samapiece.refreshToken')).toBeNull();
     expect(window.localStorage.getItem('samapiece.accessTokenExpiresAt')).toBeNull();
   });
+
+  it('affiche le bouton "Ouvrir une fiche" et appelle onNaviguer(\'fiche\') au clic', async () => {
+    const onNaviguer = vi.fn();
+    const utilisateur = userEvent.setup();
+    render(
+      <AgentShell
+        actif="pieces"
+        onNaviguer={onNaviguer}
+        onRetourPublic={vi.fn()}
+        onDeconnexion={vi.fn()}
+      >
+        <div>contenu</div>
+      </AgentShell>,
+    );
+
+    const bouton = screen.getByRole('button', { name: 'Ouvrir une fiche' });
+    expect(bouton).toBeInTheDocument();
+    await utilisateur.click(bouton);
+
+    expect(onNaviguer).toHaveBeenCalledWith('fiche');
+  });
 });

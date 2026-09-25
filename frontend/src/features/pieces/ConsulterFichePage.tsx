@@ -65,11 +65,11 @@ function ConsulterFichePage() {
             value={identifiant}
             onChange={(e) => setIdentifiant(e.target.value)}
           />
-          <span className="text-xs text-slate-500">
-            Cet identifiant technique est visible sur la fiche affichée juste après
-            l&apos;enregistrement d&apos;une pièce.
-          </span>
         </label>
+        <span className="-mt-3 text-xs text-slate-500">
+          Cet identifiant technique est visible sur la fiche affichée juste après
+          l&apos;enregistrement d&apos;une pièce.
+        </span>
         <button type="submit" className="btn-primary self-start" disabled={enChargement}>
           Ouvrir la fiche
         </button>

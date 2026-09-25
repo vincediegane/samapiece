@@ -3,7 +3,10 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import EnregistrementPiecePage from './EnregistrementPiecePage';
 import type { PieceResponse } from './types';
+import { STATUT_PIECE_LABELS } from './types';
 import { mettreEnFile } from '../../shared/offline/fileSynchronisation';
+import { recupererAgentCourant } from '../dashboard/dashboardApi';
+import type { AgentCourant } from '../dashboard/types';
 
 vi.mock('../../shared/offline/fileSynchronisation', () => ({
   mettreEnFile: vi.fn().mockResolvedValue({}),
@@ -12,6 +15,21 @@ vi.mock('../../shared/offline/fileSynchronisation', () => ({
   reessayerTout: vi.fn(),
   demarrerDeclencheurs: vi.fn(() => () => {}),
 }));
+
+vi.mock('../dashboard/dashboardApi', () => ({
+  recupererAgentCourant: vi.fn(),
+}));
+
+const AGENT_COURANT_MOCK: AgentCourant = {
+  id: 'agent-1',
+  matricule: 'PN-2024-00001',
+  nom: 'Diop Awa',
+  role: 'AGENT',
+  posteId: 'poste-1',
+  posteNom: 'Commissariat Central Dakar',
+  actif: true,
+  creeLe: '2026-01-15T10:00:00Z',
+};
 
 const PIECE_RESPONSE_MOCK: PieceResponse = {
   id: 'id-1',
@@ -25,7 +43,7 @@ const PIECE_RESPONSE_MOCK: PieceResponse = {
   dateNaissanceTitulaire: null,
   dateDepot: '2026-01-15',
   etatDocument: null,
-  statut: 'EN_ATTENTE',
+  statut: 'DISPONIBLE',
   remarques: null,
   creeLe: '2026-01-15T10:00:00Z',
 };
@@ -46,6 +64,7 @@ async function remplirChampsRequis() {
 beforeEach(() => {
   window.localStorage.setItem('samapiece.accessToken', 'jeton-factice');
   vi.stubGlobal('fetch', vi.fn());
+  vi.mocked(recupererAgentCourant).mockResolvedValue(AGENT_COURANT_MOCK);
 });
 
 describe('EnregistrementPiecePage', () => {
@@ -151,6 +170,20 @@ describe('EnregistrementPiecePage', () => {
 
     expect(await screen.findByText(/PC-ABCDEF01-2026-00001/)).toBeInTheDocument();
     expect(screen.getByLabelText('Nom du titulaire')).toHaveValue('');
+  });
+
+  it('affiche le badge de statut du reçu via STATUT_PIECE_LABELS', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      status: 201,
+      json: async () => PIECE_RESPONSE_MOCK,
+    } as Response);
+
+    render(<EnregistrementPiecePage />);
+    const utilisateur = await remplirChampsRequis();
+    await utilisateur.click(screen.getByRole('button', { name: 'Enregistrer la pièce' }));
+
+    expect(await screen.findByText(STATUT_PIECE_LABELS.DISPONIBLE)).toBeInTheDocument();
   });
 
   it('affiche un message de session expirée sur 401', async () => {
