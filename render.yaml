@@ -159,7 +159,16 @@ services:
     dockerContext: ./frontend
     plan: free
     envVars:
-      - key: SERVER_PORT
-        value: "8080" # doit correspondre au port reellement ecoute par samapiece-backend
-      - key: BACKEND_HOST
-        fromService: { type: web, name: samapiece-backend, property: host }
+      # IMPORTANT (verifie en pratique, pas une hypothese) : le nom du service
+      # backend (`samapiece-backend`) n'est PAS resolvable comme hostname
+      # interne sur Render — `nginx: [emerg] host not found in upstream
+      # "samapiece-backend"` au demarrage, meme entre deux services du meme
+      # compte/region. Le proxy nginx (`nginx.conf.template`) doit donc cibler
+      # l'URL PUBLIQUE HTTPS du backend, jamais un nom de service interne.
+      - key: BACKEND_URL
+        fromService: { type: web, name: samapiece-backend, property: url }
+        # (hypothese a confirmer au deploiement manuel) : `property: url` est
+        # la forme utilisee ici pour recuperer l'URL publique complete
+        # (https://samapiece-backend.onrender.com) ; a defaut, renseigner
+        # cette valeur en clair (ce n'est pas un secret, c'est une URL
+        # publique).

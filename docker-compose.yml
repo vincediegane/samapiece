@@ -64,8 +64,7 @@ services:
         VITE_SENTRY_DSN: ${VITE_SENTRY_DSN}
     image: samapiece-frontend:dev
     environment:
-      SERVER_PORT: ${SERVER_PORT}
-      BACKEND_HOST: backend
+      BACKEND_URL: http://backend:${SERVER_PORT}
     depends_on:
       backend:
         condition: service_healthy
