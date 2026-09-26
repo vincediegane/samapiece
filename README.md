@@ -68,6 +68,82 @@ un défaut non sensible en `dev`). Détail des profils et commande pour en chang
 voir la section [« Profils disponibles »](./backend/README.md#profils-disponibles) de
 `backend/README.md`.
 
+## Déploiement sur Render (démo)
+
+Un [Blueprint Render](https://render.com/docs/blueprint-spec) versionné, [`render.yaml`](./render.yaml),
+décrit un environnement de **démo/suivi client gratuit** (backend, frontend, PostgreSQL, Redis),
+distinct de la cible d'hébergement souverain visée pour la production (§11 de `PROJET-SAMAPIECE.md`).
+
+**Décision explicite : uniquement des plans gratuits Render, jamais de service payant.** Conséquence :
+Meilisearch, MinIO et RabbitMQ (qui n'ont pas d'équivalent gratuit exploitable sur Render — pas de
+disque persistant sur le plan gratuit, données perdues à chaque veille du service) sont **volontairement
+absents** de cette démo :
+- **Recherche publique** : fonctionne quand même — `RecherchePubliqueService` retombe automatiquement
+  sur une requête PostgreSQL directe dès que Meilisearch est indisponible (repli déjà présent dans le
+  code, pas une dégradation introduite par ce déploiement).
+- **Upload de photo de document** : non fonctionnel sur cette démo (MinIO absent), mais n'est de toute
+  façon pas exposé dans l'interface actuelle (ticket #65 non livré) — aucune régression visible.
+- **Notifications SMS asynchrones** : jamais délivrées sur cette démo (RabbitMQ absent). Vérifié
+  empiriquement que l'absence de RabbitMQ ne bloque pas le démarrage du backend
+  (`management.health.rabbit.enabled=false`, déjà configuré ; les listeners retentent la connexion en
+  arrière-plan sans jamais faire échouer `/actuator/health`).
+
+Si ces 3 services redeviennent nécessaires (au-delà d'une démo gratuite), un ticket dédié devra les
+réintroduire avec un budget explicitement validé — voir l'historique git de `render.yaml` pour la
+version "stack complète" précédente (avant cette révision).
+
+**⚠️ Environnement de démonstration : ne jamais saisir de données personnelles citoyennes réelles**
+(numéro de document, contact, etc.) sur cet environnement — seulement des données synthétiques de test.
+
+### Déploiement initial (action humaine)
+
+1. Créer un compte Render et connecter ce dépôt GitHub (ou utiliser le serveur MCP Render si configuré).
+2. Dans le dashboard Render, choisir "New Blueprint" et pointer vers `render.yaml` à la racine du dépôt.
+3. Render crée les 4 services et la base décrits dans `render.yaml`, tous en plan **gratuit**, mais **ne
+   déploie rien tant que les secrets ne sont pas renseignés** : dans l'onglet "Environment" du groupe
+   `samapiece-secrets`, saisir manuellement chaque valeur (JWT, clés de chiffrement, clé API SMS,
+   informations du premier compte admin). Aucune de ces valeurs n'est ni ne doit être présente dans le
+   fichier versionné. Les variables Meilisearch/MinIO/RabbitMQ sont en revanche déjà écrites en clair
+   dans `render.yaml` : ce ne sont pas des secrets, seulement des valeurs non vides requises pour
+   satisfaire la configuration du backend, ces services n'étant pas déployés.
+4. Avant le tout premier démarrage du service `samapiece-backend` avec `BOOTSTRAP_ADMIN_ENABLED=true` :
+   se connecter à `samapiece-db` via le Shell Render (`psql`) et exécuter l'insertion manuelle d'une
+   `Region`/un `Poste` de démonstration décrite dans
+   [`backend/README.md` — "Bootstrap du premier compte administrateur"](./backend/README.md#bootstrap-du-premier-compte-administrateur),
+   puis noter l'`id` du `Poste` créé pour la variable `BOOTSTRAP_ADMIN_POSTE_ID`.
+5. Déployer le Blueprint. Les migrations Flyway s'exécutent **automatiquement au démarrage** du service
+   `samapiece-backend` (même mécanisme qu'en local, aucune commande séparée à lancer) : vérifier les
+   logs Render du service pour confirmer leur application, puis suivre la procédure de bootstrap admin
+   ci-dessus (§ "Procédure" de `backend/README.md`) pour récupérer les identifiants du premier compte.
+
+### Redéploiement
+
+Pas de CI/CD automatique : un push sur `main` ne déclenche aucun déploiement Render tant que
+l'auto-deploy n'est pas activé manuellement dans le dashboard. Pour redéployer une nouvelle version,
+utiliser le bouton "Manual Deploy" sur le service concerné (`samapiece-backend`/`samapiece-frontend`)
+dans le dashboard Render.
+
+### Risques et hypothèses non vérifiables sans exécution réelle
+
+- **Base de données gratuite Render supprimée automatiquement après une durée limitée** (environ 30
+  jours à la date d'écriture) : accepté comme coût du choix "gratuit". Il faudra recréer `samapiece-db`
+  et rejouer la procédure de bootstrap admin (§ ci-dessus) périodiquement pour garder la démo utilisable.
+- **Veille des services gratuits après ~15 minutes d'inactivité** : le premier accès après une période
+  d'inactivité peut prendre quelques dizaines de secondes le temps que Render redémarre les services
+  `samapiece-backend`/`samapiece-frontend`/`samapiece-redis` — comportement normal du plan gratuit, à
+  ne pas confondre avec une panne.
+- **TLS/authentification sur le Redis managé Render** : le code actuel ne configure ni mot de passe ni
+  TLS pour Redis, et `management.health.redis.enabled=false` (fail-open déjà acté au ticket #19) masque
+  silencieusement une mauvaise configuration côté `/actuator/health`. Une vérification manuelle du
+  rate-limiting/CAPTCHA de la recherche publique (déclencher plusieurs recherches rapprochées et
+  constater une limitation effective) est nécessaire après déploiement, pas seulement un health check.
+- **Port détecté sans variable `PORT`** : l'hypothèse retenue est que Render détecte le port via `EXPOSE`
+  dans les Dockerfiles backend/frontend (`runtime: docker`) sans imposer de variable `PORT` — à confirmer
+  au premier déploiement.
+- **Schéma exact du Blueprint Render** : le type exact du service Redis managé (`type: redis`) est une
+  hypothèse non certifiée, marquée en commentaire directement dans `render.yaml` — à ajuster au moment
+  du "Deploy Blueprint" sans que cela remette en cause l'architecture des 4 services.
+
 ## Conventions
 
 ### Commits
