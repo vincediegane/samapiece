@@ -6,6 +6,7 @@ import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import sn.samapiece.reporting.StockParPosteAgrege;
 import sn.samapiece.reporting.StockPosteAgrege;
 
 public interface PieceRepository extends JpaRepository<Piece, UUID> {
@@ -33,4 +34,36 @@ public interface PieceRepository extends JpaRepository<Piece, UUID> {
               AND (CURRENT_DATE - date_depot) > :seuilJours
             """, nativeQuery = true)
     long compterDepassantSeuil(@Param("posteId") UUID posteId, @Param("seuilJours") int seuilJours);
+
+    @Query(value = """
+            SELECT po.id AS "posteId", po.nom AS "posteNom", r.id AS "regionId", r.nom AS "regionNom",
+                   COUNT(p.id) AS "nombrePieces",
+                   COALESCE(SUM(CURRENT_DATE - p.date_depot), 0) AS "ancienneteTotaleJours",
+                   AVG(CURRENT_DATE - p.date_depot) AS "ancienneteMoyenneJours",
+                   MAX(CURRENT_DATE - p.date_depot) AS "ancienneteMaxJours",
+                   COUNT(p.id) FILTER (WHERE (CURRENT_DATE - p.date_depot) > :seuilJours) AS "nombreDepassant"
+            FROM poste po
+            JOIN region r ON r.id = po.region_id
+            LEFT JOIN piece p ON p.poste_id = po.id AND p.statut IN ('disponible', 'reclamee')
+            GROUP BY po.id, po.nom, r.id, r.nom
+            ORDER BY COUNT(p.id) FILTER (WHERE (CURRENT_DATE - p.date_depot) > :seuilJours) DESC, po.nom ASC, po.id ASC
+            """, nativeQuery = true)
+    List<StockParPosteAgrege> agregerStockParPosteNational(@Param("seuilJours") int seuilJours);
+
+    @Query(value = """
+            SELECT po.id AS "posteId", po.nom AS "posteNom", r.id AS "regionId", r.nom AS "regionNom",
+                   COUNT(p.id) AS "nombrePieces",
+                   COALESCE(SUM(CURRENT_DATE - p.date_depot), 0) AS "ancienneteTotaleJours",
+                   AVG(CURRENT_DATE - p.date_depot) AS "ancienneteMoyenneJours",
+                   MAX(CURRENT_DATE - p.date_depot) AS "ancienneteMaxJours",
+                   COUNT(p.id) FILTER (WHERE (CURRENT_DATE - p.date_depot) > :seuilJours) AS "nombreDepassant"
+            FROM poste po
+            JOIN region r ON r.id = po.region_id
+            LEFT JOIN piece p ON p.poste_id = po.id AND p.statut IN ('disponible', 'reclamee')
+            WHERE po.region_id = :regionId
+            GROUP BY po.id, po.nom, r.id, r.nom
+            ORDER BY COUNT(p.id) FILTER (WHERE (CURRENT_DATE - p.date_depot) > :seuilJours) DESC, po.nom ASC, po.id ASC
+            """, nativeQuery = true)
+    List<StockParPosteAgrege> agregerStockParPosteRegion(
+            @Param("regionId") UUID regionId, @Param("seuilJours") int seuilJours);
 }
