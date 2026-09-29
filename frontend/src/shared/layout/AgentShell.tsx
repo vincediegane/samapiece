@@ -4,6 +4,7 @@ import { recupererAgentCourant } from '../../features/dashboard/dashboardApi';
 import type { AgentCourant } from '../../features/dashboard/types';
 import { listerFile } from '../offline/fileSynchronisation';
 import { peutConsulterAudit } from '../../features/audit/roles';
+import { peutVoirVueMultiPoste } from '../../features/dashboard/roles';
 import { peutGererReferentiel } from '../../features/referentiel/roles';
 import { viderSession } from '../../features/auth/session';
 import { useRafraichissementSession } from '../../features/auth/useRafraichissementSession';
@@ -17,7 +18,7 @@ import {
   IconUsers,
 } from '../icons';
 
-export type OngletAgent = 'pieces' | 'fiche' | 'dashboard' | 'agents' | 'audit' | 'referentiel';
+export type OngletAgent = 'pieces' | 'fiche' | 'dashboard' | 'agents' | 'audit' | 'referentiel' | 'vue-multi-poste';
 
 interface AgentShellProps {
   actif: OngletAgent;
@@ -122,6 +123,16 @@ function AgentShell({
             <IconChart width={18} height={18} />
             Tableau de bord
           </button>
+          {agent && peutVoirVueMultiPoste(agent.role) && (
+            <button
+              type="button"
+              className={actif === 'vue-multi-poste' ? 'sidebar-link-active' : 'sidebar-link'}
+              onClick={() => onNaviguer('vue-multi-poste')}
+            >
+              <IconChart width={18} height={18} />
+              Vue multi-poste
+            </button>
+          )}
           <button
             type="button"
             className={actif === 'agents' ? 'sidebar-link-active' : 'sidebar-link'}

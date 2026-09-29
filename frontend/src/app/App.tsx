@@ -3,6 +3,7 @@ import AuditPage from '../features/audit/AuditPage';
 import ReferentielPage from '../features/referentiel/ReferentielPage';
 import AgentsPage from '../features/agents/AgentsPage';
 import DashboardPage from '../features/dashboard/DashboardPage';
+import VueMultiPostePage from '../features/dashboard/VueMultiPostePage';
 import EnregistrementPiecePage from '../features/pieces/EnregistrementPiecePage';
 import ConsulterFichePage from '../features/pieces/ConsulterFichePage';
 import RecherchePubliquePage from '../features/recherche-publique/RecherchePubliquePage';
@@ -15,7 +16,7 @@ import type { OngletAgent } from '../shared/layout/AgentShell';
 
 type Onglet = 'accueil' | 'recherche' | 'connexion' | OngletAgent;
 
-const ONGLETS_AGENT: OngletAgent[] = ['pieces', 'fiche', 'dashboard', 'agents', 'audit', 'referentiel'];
+const ONGLETS_AGENT: OngletAgent[] = ['pieces', 'fiche', 'dashboard', 'agents', 'audit', 'referentiel', 'vue-multi-poste'];
 
 function estOngletAgent(onglet: Onglet): onglet is OngletAgent {
   return (ONGLETS_AGENT as Onglet[]).includes(onglet);
@@ -46,6 +47,7 @@ function App() {
         {onglet === 'agents' && <AgentsPage />}
         {onglet === 'audit' && <AuditPage />}
         {onglet === 'referentiel' && <ReferentielPage />}
+        {onglet === 'vue-multi-poste' && <VueMultiPostePage />}
       </AgentShell>
     );
   }
