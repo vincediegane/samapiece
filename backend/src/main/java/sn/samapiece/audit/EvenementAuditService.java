@@ -31,7 +31,23 @@ public class EvenementAuditService {
     }
 
     @Transactional(readOnly = true)
-    public Page<EvenementAuditResponse> lister(Pageable pageable) {
-        return evenementAuditRepository.findAll(pageable).map(EvenementAuditResponse::of);
+    public Page<EvenementAuditResponse> lister(String action, String entiteCible, Pageable pageable) {
+        String actionFiltre = normaliser(action);
+        String entiteFiltre = normaliser(entiteCible);
+        Page<EvenementAudit> page;
+        if (actionFiltre != null && entiteFiltre != null) {
+            page = evenementAuditRepository.findByActionAndEntiteCible(actionFiltre, entiteFiltre, pageable);
+        } else if (actionFiltre != null) {
+            page = evenementAuditRepository.findByAction(actionFiltre, pageable);
+        } else if (entiteFiltre != null) {
+            page = evenementAuditRepository.findByEntiteCible(entiteFiltre, pageable);
+        } else {
+            page = evenementAuditRepository.findAll(pageable);
+        }
+        return page.map(EvenementAuditResponse::of);
+    }
+
+    private static String normaliser(String valeur) {
+        return valeur == null || valeur.isBlank() ? null : valeur.trim();
     }
 }

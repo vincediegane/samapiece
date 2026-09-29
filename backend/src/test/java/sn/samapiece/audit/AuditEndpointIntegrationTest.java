@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.charset.StandardCharsets;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -69,6 +70,9 @@ class AuditEndpointIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private EvenementAuditService evenementAuditService;
 
     @BeforeEach
     void nettoyer() {
@@ -141,6 +145,79 @@ class AuditEndpointIntegrationTest {
 
         mockMvc.perform(get("/api/v1/audit/evenements").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void lister_sansToken_shouldRetourner401() throws Exception {
+        mockMvc.perform(get("/api/v1/audit/evenements")).andExpect(status().isUnauthorized());
+    }
+
+    private void inserer(String action, String entiteCible) {
+        evenementAuditService.enregistrer(
+                UUID.randomUUID(), "AGENT", action, entiteCible, UUID.randomUUID(), "{}", "127.0.0.1");
+    }
+
+    private void insererJeuDeDonnees() {
+        inserer("PIECE_CREEE", "PIECE");
+        inserer("PIECE_CONSULTEE", "PIECE");
+        inserer("PIECE_CREEE", "AGENT");
+    }
+
+    @Test
+    void lister_filtreAction_shouldRetournerSeulementCetteAction() throws Exception {
+        String token = creerEtLoginToken("PN-2024-00810", Role.AUDITEUR, creerPoste());
+        insererJeuDeDonnees();
+
+        mockMvc.perform(get("/api/v1/audit/evenements").param("action", "PIECE_CREEE")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(2))
+                .andExpect(jsonPath("$.content[?(@.action != 'PIECE_CREEE')]").isEmpty());
+    }
+
+    @Test
+    void lister_filtreEntite_shouldRetournerSeulementCetteEntite() throws Exception {
+        String token = creerEtLoginToken("PN-2024-00811", Role.ADMIN_NATIONAL, creerPoste());
+        insererJeuDeDonnees();
+
+        mockMvc.perform(get("/api/v1/audit/evenements").param("entiteCible", "PIECE")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(2))
+                .andExpect(jsonPath("$.content[?(@.entiteCible != 'PIECE')]").isEmpty());
+    }
+
+    @Test
+    void lister_filtreActionEtEntite_shouldAppliquerUnEt() throws Exception {
+        String token = creerEtLoginToken("PN-2024-00812", Role.AUDITEUR, creerPoste());
+        insererJeuDeDonnees();
+
+        mockMvc.perform(get("/api/v1/audit/evenements").param("action", "PIECE_CREEE").param("entiteCible", "PIECE")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1));
+    }
+
+    @Test
+    void lister_filtreValeurInconnue_shouldRetournerPageVide() throws Exception {
+        String token = creerEtLoginToken("PN-2024-00813", Role.AUDITEUR, creerPoste());
+        insererJeuDeDonnees();
+
+        mockMvc.perform(get("/api/v1/audit/evenements").param("action", "INCONNUE")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(0))
+                .andExpect(jsonPath("$.content").isEmpty());
+    }
+
+    @Test
+    void lister_sansFiltre_shouldRetournerTousLesEvenements() throws Exception {
+        String token = creerEtLoginToken("PN-2024-00814", Role.AUDITEUR, creerPoste());
+        insererJeuDeDonnees();
+
+        mockMvc.perform(get("/api/v1/audit/evenements").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(3));
     }
 
     @Test

@@ -76,6 +76,28 @@ describe('App — espace agent et session', () => {
     expect(await screen.findByLabelText('Identifiant de la fiche (UUID)')).toBeInTheDocument();
   });
 
+  it('affiche AuditPage pour un auditeur et refuse un agent sans appel audit', async () => {
+    window.localStorage.setItem('samapiece.accessToken', 'access-1');
+    window.localStorage.setItem('samapiece.refreshToken', 'refresh-1');
+    window.localStorage.setItem('samapiece.accessTokenExpiresAt', String(Date.now() + 900_000));
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ content: [], number: 0, totalPages: 0, totalElements: 0, size: 20 }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    vi.mocked(recupererAgentCourant).mockResolvedValue({ ...AGENT_COURANT_MOCK, role: 'AUDITEUR' });
+
+    render(<App />);
+    await clicSurEspaceAgent();
+    await userEvent.setup().click(await screen.findByRole('button', { name: "Journal d'audit" }));
+
+    expect(await screen.findByText("Aucun événement d'audit")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/api/v1/audit/evenements?page=0&size=20'),
+      expect.anything(),
+    );
+  });
+
   it('ramène à LoginPage après déconnexion depuis la sidebar agent', async () => {
     window.localStorage.setItem('samapiece.accessToken', 'access-1');
     window.localStorage.setItem('samapiece.refreshToken', 'refresh-1');

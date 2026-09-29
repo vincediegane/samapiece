@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import AuditPage from '../features/audit/AuditPage';
 import AgentsPage from '../features/agents/AgentsPage';
 import DashboardPage from '../features/dashboard/DashboardPage';
 import EnregistrementPiecePage from '../features/pieces/EnregistrementPiecePage';
@@ -13,7 +14,7 @@ import type { OngletAgent } from '../shared/layout/AgentShell';
 
 type Onglet = 'accueil' | 'recherche' | 'connexion' | OngletAgent;
 
-const ONGLETS_AGENT: OngletAgent[] = ['pieces', 'fiche', 'dashboard', 'agents'];
+const ONGLETS_AGENT: OngletAgent[] = ['pieces', 'fiche', 'dashboard', 'agents', 'audit'];
 
 function estOngletAgent(onglet: Onglet): onglet is OngletAgent {
   return (ONGLETS_AGENT as Onglet[]).includes(onglet);
@@ -42,6 +43,7 @@ function App() {
         {onglet === 'fiche' && <ConsulterFichePage />}
         {onglet === 'dashboard' && <DashboardPage />}
         {onglet === 'agents' && <AgentsPage />}
+        {onglet === 'audit' && <AuditPage />}
       </AgentShell>
     );
   }
