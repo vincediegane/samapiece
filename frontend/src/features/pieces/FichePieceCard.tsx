@@ -5,6 +5,7 @@ import { STATUT_PIECE_COULEURS, STATUT_PIECE_LABELS, TYPE_DOCUMENT_LABELS } from
 import RetraitForm from './RetraitForm';
 import SignalerForm from './SignalerForm';
 import DeblocageForm from './DeblocageForm';
+import PhotosFiche from './PhotosFiche';
 import { IconDownload } from '../../shared/icons';
 
 interface FichePieceCardProps {
@@ -156,6 +157,8 @@ function FichePieceCard({ piece, roleAgentCourant, onMisAJour }: FichePieceCardP
           Télécharger le reçu
         </button>
       </div>
+
+      <PhotosFiche pieceId={piece.id} roleAgentCourant={roleAgentCourant} />
 
       {formulaireActif === 'retrait' && (
         <div className="mt-5 border-t border-slate-200 pt-5">
