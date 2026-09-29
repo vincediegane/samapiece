@@ -4,11 +4,19 @@ import userEvent from '@testing-library/user-event';
 import App from './App';
 import type { AgentCourant } from '../features/dashboard/types';
 import { recupererAgentCourant } from '../features/dashboard/dashboardApi';
+import { consulterPiece, listerPieces } from '../features/pieces/piecesApi';
 
 vi.mock('../features/dashboard/dashboardApi', () => ({
   recupererAgentCourant: vi.fn(),
   getStatistiquesPoste: vi.fn(),
 }));
+
+vi.mock('../features/pieces/piecesApi', async () => {
+  const actual = await vi.importActual<typeof import('../features/pieces/piecesApi')>(
+    '../features/pieces/piecesApi',
+  );
+  return { ...actual, listerPieces: vi.fn(), consulterPiece: vi.fn() };
+});
 
 vi.mock('../shared/offline/fileSynchronisation', () => ({
   listerFile: vi.fn().mockResolvedValue([]),
@@ -74,6 +82,61 @@ describe('App — espace agent et session', () => {
     await utilisateur.click(screen.getByRole('button', { name: 'Ouvrir une fiche' }));
 
     expect(await screen.findByLabelText('Identifiant de la fiche (UUID)')).toBeInTheDocument();
+  });
+
+  it('ouvre la fiche depuis la liste des pièces en stock puis réinitialise le champ via la sidebar', async () => {
+    window.localStorage.setItem('samapiece.accessToken', 'access-1');
+    window.localStorage.setItem('samapiece.refreshToken', 'refresh-1');
+    window.localStorage.setItem('samapiece.accessTokenExpiresAt', String(Date.now() + 900_000));
+    const id = '11111111-1111-1111-1111-111111111111';
+    vi.mocked(listerPieces).mockResolvedValue({
+      content: [
+        {
+          id,
+          numeroFiche: 'PC-ABCDEF01-2026-00001',
+          typeDocument: 'CNI',
+          statut: 'DISPONIBLE',
+          dateDepot: '2026-01-15',
+          ancienneteJours: 10,
+          depasseSeuil: false,
+        },
+      ],
+      totalElements: 1,
+      totalPages: 1,
+      number: 0,
+      size: 20,
+    });
+    vi.mocked(consulterPiece).mockResolvedValue({
+      id,
+      numeroFiche: 'PC-ABCDEF01-2026-00001',
+      posteId: 'poste-1',
+      agentCreateurId: 'agent-1',
+      typeDocument: 'CNI',
+      nomTitulaire: 'Diop',
+      prenomTitulaire: 'Awa',
+      numeroDocumentMasque: '****1234',
+      dateNaissanceTitulaire: null,
+      dateDepot: '2026-01-15',
+      etatDocument: null,
+      statut: 'DISPONIBLE',
+      remarques: null,
+      creeLe: '2026-01-15T10:00:00Z',
+    });
+
+    render(<App />);
+    await clicSurEspaceAgent();
+    await screen.findByLabelText('Type de document');
+
+    const utilisateur = userEvent.setup();
+    await utilisateur.click(screen.getByRole('button', { name: 'Pièces en stock' }));
+    await utilisateur.click(await screen.findByRole('button', { name: 'Ouvrir la fiche' }));
+
+    expect(await screen.findByLabelText('Identifiant de la fiche (UUID)')).toHaveValue(id);
+    expect(consulterPiece).toHaveBeenCalledWith(id);
+
+    await utilisateur.click(screen.getByRole('button', { name: 'Ouvrir une fiche' }));
+
+    expect(await screen.findByLabelText('Identifiant de la fiche (UUID)')).toHaveValue('');
   });
 
   it('affiche AuditPage pour un auditeur et refuse un agent sans appel audit', async () => {

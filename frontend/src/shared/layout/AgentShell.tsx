@@ -18,7 +18,7 @@ import {
   IconUsers,
 } from '../icons';
 
-export type OngletAgent = 'pieces' | 'fiche' | 'dashboard' | 'agents' | 'audit' | 'referentiel' | 'vue-multi-poste';
+export type OngletAgent = 'pieces' | 'fiche' | 'dashboard' | 'stock' | 'agents' | 'audit' | 'referentiel' | 'vue-multi-poste';
 
 interface AgentShellProps {
   actif: OngletAgent;
@@ -122,6 +122,14 @@ function AgentShell({
           >
             <IconChart width={18} height={18} />
             Tableau de bord
+          </button>
+          <button
+            type="button"
+            className={actif === 'stock' ? 'sidebar-link-active' : 'sidebar-link'}
+            onClick={() => onNaviguer('stock')}
+          >
+            <IconDocument width={18} height={18} />
+            Pièces en stock
           </button>
           {agent && peutVoirVueMultiPoste(agent.role) && (
             <button

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   consulterPiece,
   debloquerPiece,
+  listerPieces,
   PieceApiError,
   retirerPiece,
   signalerPiece,
@@ -226,5 +227,38 @@ describe('PieceApiError', () => {
     expect(erreur.status).toBe(404);
     expect(erreur.message).toBe('message');
     expect(erreur.name).toBe('PieceApiError');
+  });
+});
+
+describe('listerPieces', () => {
+  const PAGE = { content: [], totalElements: 0, totalPages: 0, number: 0, size: 20 };
+
+  it('omet le statut par défaut et envoie le header Authorization', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({ ok: true, status: 200, json: async () => PAGE } as Response);
+
+    const resultat = await listerPieces({ page: 0 });
+
+    expect(resultat).toEqual(PAGE);
+    const [url, options] = vi.mocked(fetch).mock.calls[0];
+    expect(url).toBe('/api/v1/pieces?page=0&size=20');
+    expect((options?.headers as Record<string, string>).Authorization).toBe('Bearer jeton-factice');
+  });
+
+  it('inclut le statut quand il est fourni', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({ ok: true, status: 200, json: async () => PAGE } as Response);
+
+    await listerPieces({ statut: 'RETIREE', page: 2, size: 10 });
+
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe('/api/v1/pieces?page=2&size=10&statut=RETIREE');
+  });
+
+  it.each([
+    [401, 'Session expirée, reconnectez-vous.'],
+    [403, 'Accès refusé à la liste des pièces.'],
+    [500, 'Erreur 500'],
+  ])('rejette avec le message attendu sur %i', async (status, message) => {
+    vi.mocked(fetch).mockResolvedValueOnce({ ok: false, status } as Response);
+
+    await expect(listerPieces({ page: 0 })).rejects.toMatchObject({ message, status });
   });
 });

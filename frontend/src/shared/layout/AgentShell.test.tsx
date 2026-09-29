@@ -250,3 +250,24 @@ describe('AgentShell', () => {
     expect(onNaviguer).toHaveBeenCalledWith('fiche');
   });
 });
+
+describe('AgentShell - pièces en stock', () => {
+  it('affiche le bouton "Pièces en stock" et appelle onNaviguer("stock") au clic', async () => {
+    const onNaviguer = vi.fn();
+    const utilisateur = userEvent.setup();
+    render(
+      <AgentShell
+        actif="pieces"
+        onNaviguer={onNaviguer}
+        onRetourPublic={vi.fn()}
+        onDeconnexion={vi.fn()}
+      >
+        <div>contenu</div>
+      </AgentShell>,
+    );
+
+    await utilisateur.click(screen.getByRole('button', { name: 'Pièces en stock' }));
+
+    expect(onNaviguer).toHaveBeenCalledWith('stock');
+  });
+});
