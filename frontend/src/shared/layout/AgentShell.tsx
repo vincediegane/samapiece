@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { recupererAgentCourant } from '../../features/dashboard/dashboardApi';
 import type { AgentCourant } from '../../features/dashboard/types';
 import { listerFile } from '../offline/fileSynchronisation';
+import { peutGererAgents } from '../../features/agents/roles';
 import { peutConsulterAudit } from '../../features/audit/roles';
 import { peutVoirVueMultiPoste } from '../../features/dashboard/roles';
 import { peutGererReferentiel } from '../../features/referentiel/roles';
@@ -133,14 +134,16 @@ function AgentShell({
               Vue multi-poste
             </button>
           )}
-          <button
-            type="button"
-            className={actif === 'agents' ? 'sidebar-link-active' : 'sidebar-link'}
-            onClick={() => onNaviguer('agents')}
-          >
-            <IconUsers width={18} height={18} />
-            Agents
-          </button>
+          {agent && peutGererAgents(agent.role) && (
+            <button
+              type="button"
+              className={actif === 'agents' ? 'sidebar-link-active' : 'sidebar-link'}
+              onClick={() => onNaviguer('agents')}
+            >
+              <IconUsers width={18} height={18} />
+              Agents
+            </button>
+          )}
           {agent && peutConsulterAudit(agent.role) && (
             <button
               type="button"
