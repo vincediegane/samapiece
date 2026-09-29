@@ -1,0 +1,174 @@
+# Blueprint Render pour la demo SamaPiece (ticket #77), perimetre gratuit exclusivement.
+#
+# Ce fichier decrit l'intention de deploiement ; il n'a jamais ete applique contre un
+# compte Render reel par ce pipeline avant cette revision. Chaque point marque
+# "(hypothese a confirmer au deploiement manuel)" doit etre verifie/ajuste lors du premier
+# "Deploy Blueprint" par un humain avant de considerer ce fichier comme valide en pratique.
+#
+# DECISION EXPLICITE (revision post-review, a la demande directe de l'utilisateur) :
+# uniquement des plans gratuits Render. Meilisearch, MinIO et RabbitMQ (Private Services)
+# sont VOLONTAIREMENT ABSENTS de ce Blueprint : Render n'offre pas de disque persistant sur
+# le plan gratuit (donnees perdues a chaque veille/redemarrage du service, ~15 min
+# d'inactivite), et le serveur MCP Render connecte a ce compte n'expose meme pas d'outil de
+# creation de Private Service. Consequence fonctionnelle, verifiee dans le code plutot que
+# supposee (voir docs/bolts/77-deploiement-render-stack-complete/) :
+#   - Meilisearch absent : la recherche publique (RecherchePubliqueService) a deja un repli
+#     automatique sur une requete PostgreSQL directe des que Meilisearch leve une exception
+#     (try/catch explicite) ; l'indexation (PieceRechercheIndexService) est deja best-effort
+#     (toute exception est loguee, jamais propagee). Aucun changement de code necessaire.
+#   - MinIO absent : l'upload/telechargement de photo (PhotoStockageService) echouera avec
+#     une erreur applicative propre si jamais invoque, mais aucun ecran frontend ne permet
+#     aujourd'hui de declencher cette action (ticket #65, non livre) — non atteignable en
+#     pratique sur cette demo.
+#   - RabbitMQ absent : verifie empiriquement (demarrage local avec RABBITMQ_HOST injoignable)
+#     que l'application demarre normalement et que /actuator/health reste "UP"
+#     (management.health.rabbit.enabled=false, deja configure dans application.yml). Les
+#     listeners RabbitMQ retentent la connexion en arriere-plan sans jamais faire echouer le
+#     demarrage. Consequence : les notifications SMS asynchrones ne sont jamais delivrees sur
+#     cette demo (deja le cas de toute facon, SMS_API_ENDPOINT pointe vers un endpoint
+#     factice ci-dessous, aucune passerelle SMS reelle configuree).
+# Si ces 3 services redeviennent necessaires plus tard (au-dela d'une demo gratuite), un
+# ticket dedie devra les reintroduire avec un budget explicitement valide (voir l'historique
+# git de ce fichier pour la version "stack complete" precedente).
+#
+# Base de donnees gratuite Render : suppression automatique par Render au bout d'une duree
+# limitee (environ 30 jours a la date d'ecriture). Accepte comme cout du choix "gratuit" —
+# voir la procedure de recreation/reseed dans le README, section "Deploiement sur Render".
+#
+# Aucune valeur de secret n'est ecrite en clair ici : tout champ sensible utilise
+# `sync: false` (saisie manuelle obligatoire dans le dashboard Render au moment du
+# deploiement), dans l'envVarGroup `samapiece-secrets`. Les valeurs de Meilisearch/MinIO/
+# RabbitMQ ci-dessous ne sont PAS des secrets (ces services ne sont pas deployes) : ce sont
+# des chaines non vides arbitraires ecrites en clair, uniquement pour satisfaire les
+# contraintes @NotBlank de configuration du backend (MeilisearchProperties,
+# PhotoMinioProperties) qui exigent une valeur presente, jamais une connexion reussie.
+
+envVarGroups:
+  - name: samapiece-secrets
+    envVars:
+      - key: JWT_SECRET
+        sync: false
+      - key: PHOTO_CLE_CHIFFREMENT
+        sync: false
+      - key: ALERTE_CLE_CHIFFREMENT
+        sync: false
+      - key: SMS_API_KEY
+        sync: false
+      - key: BOOTSTRAP_ADMIN_MATRICULE
+        sync: false
+      - key: BOOTSTRAP_ADMIN_NOM
+        sync: false
+      - key: BOOTSTRAP_ADMIN_POSTE_ID
+        sync: false
+
+databases:
+  - name: samapiece-db
+    plan: free
+    databaseName: samapiece
+    user: samapiece
+
+services:
+  # --- Redis managé (Render "Key Value"), plan gratuit ---
+  - type: redis
+    # (hypothese a confirmer au deploiement manuel) : la cle Blueprint exacte du service
+    # managé Redis/Key Value pourrait differer de `type: redis` selon la version du schema
+    # Render au moment du deploiement reel.
+    name: samapiece-redis
+    plan: free
+    ipAllowList: [] # pas d'acces externe, uniquement inter-services internes
+
+  # --- Backend, plan gratuit ---
+  - type: web
+    name: samapiece-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    healthCheckPath: /actuator/health
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: staging
+      - key: SERVER_PORT
+        # (hypothese a confirmer au deploiement manuel) : Render detecte le port expose
+        # via `EXPOSE 8080` du Dockerfile pour un service `runtime: docker`, sans variable
+        # `PORT` imposee comme sur les runtimes natifs.
+        value: "8080"
+      - key: DB_HOST
+        fromDatabase: { name: samapiece-db, property: host }
+      - key: DB_PORT
+        fromDatabase: { name: samapiece-db, property: port }
+      - key: DB_NAME
+        fromDatabase: { name: samapiece-db, property: database }
+      - key: DB_USER
+        fromDatabase: { name: samapiece-db, property: user }
+      - key: DB_PASSWORD
+        fromDatabase: { name: samapiece-db, property: password }
+      - key: REDIS_HOST
+        fromService: { type: redis, name: samapiece-redis, property: host }
+      - key: REDIS_PORT
+        fromService: { type: redis, name: samapiece-redis, property: port }
+      # --- Meilisearch : service non deploye (pas d'equivalent gratuit), valeurs
+      # placeholder non sensibles, requises uniquement pour satisfaire @NotBlank. La
+      # recherche publique retombe automatiquement sur PostgreSQL (voir en-tete). ---
+      - key: MEILISEARCH_HOST
+        value: "http://meilisearch-non-deploye.invalid:7700"
+      - key: MEILISEARCH_API_KEY
+        value: "non-utilise"
+      - key: MEILISEARCH_INDEX_PIECES
+        value: pieces
+      # --- MinIO : service non deploye (pas d'equivalent gratuit), valeurs placeholder
+      # non sensibles. L'upload photo n'est de toute facon pas exploitable depuis l'UI
+      # actuelle (ticket #65 non livre) — voir en-tete. ---
+      - key: MINIO_ENDPOINT
+        value: "http://minio-non-deploye.invalid:9000"
+      - key: MINIO_ACCESS_KEY
+        value: "non-utilise"
+      - key: MINIO_SECRET_KEY
+        value: "non-utilise"
+      - key: MINIO_BUCKET_PHOTOS
+        value: samapiece-photos-demo
+      # --- RabbitMQ : service non deploye (pas d'equivalent gratuit), valeurs placeholder
+      # non sensibles. Verifie empiriquement que l'absence de RabbitMQ ne bloque pas le
+      # demarrage (voir en-tete) ; les notifications SMS asynchrones sont simplement
+      # non delivrees sur cette demo. ---
+      - key: RABBITMQ_HOST
+        value: "rabbitmq-non-deploye.invalid"
+      - key: RABBITMQ_PORT
+        value: "5672"
+      - key: RABBITMQ_USER
+        value: "non-utilise"
+      - key: RABBITMQ_PASSWORD
+        value: "non-utilise"
+      - fromGroup: samapiece-secrets
+      - key: SMS_API_ENDPOINT
+        value: "http://localhost:1" # pas de passerelle SMS reelle pour la demo, cf. .env.example dev
+      - key: SMS_SENDER_ID
+        value: SamaPiece
+      - key: BOOTSTRAP_ADMIN_ENABLED
+        # Ne desactiver ("false") qu'apres le tout premier demarrage reussi sur une base
+        # vide (cf. README section Render + backend/README.md "Bootstrap du premier compte
+        # administrateur") ; laisser a "true" ne recree jamais de doublon (mecanisme
+        # idempotent) mais ce n'est pas une raison de le laisser active indefiniment.
+        value: "true"
+
+  # --- Frontend, plan gratuit ---
+  - type: web
+    name: samapiece-frontend
+    runtime: docker
+    dockerfilePath: ./frontend/Dockerfile
+    dockerContext: ./frontend
+    plan: free
+    envVars:
+      # IMPORTANT (verifie en pratique, pas une hypothese) : le nom du service
+      # backend (`samapiece-backend`) n'est PAS resolvable comme hostname
+      # interne sur Render — `nginx: [emerg] host not found in upstream
+      # "samapiece-backend"` au demarrage, meme entre deux services du meme
+      # compte/region. Le proxy nginx (`nginx.conf.template`) doit donc cibler
+      # l'URL PUBLIQUE HTTPS du backend, jamais un nom de service interne.
+      - key: BACKEND_URL
+        fromService: { type: web, name: samapiece-backend, property: url }
+        # (hypothese a confirmer au deploiement manuel) : `property: url` est
+        # la forme utilisee ici pour recuperer l'URL publique complete
+        # (https://samapiece-backend.onrender.com) ; a defaut, renseigner
+        # cette valeur en clair (ce n'est pas un secret, c'est une URL
+        # publique).

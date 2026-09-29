@@ -5,8 +5,13 @@ server {
     index index.html;
 
     location /api/ {
-        proxy_pass http://backend:${SERVER_PORT}/api/;
-        proxy_set_header Host $host;
+        proxy_pass ${BACKEND_URL}/api/;
+        proxy_ssl_server_name on;
+        # Ne PAS forcer Host au nom du frontend ($host) : quand la cible est
+        # l'URL publique onrender.com du backend, cela fait router la requete
+        # vers le frontend par l'edge Render/Cloudflare (boucle, 508 Loop
+        # Detected, verifie en pratique). Laisser nginx utiliser $proxy_host
+        # (le nom d'hote reellement resolu par proxy_pass, ici le backend).
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
