@@ -1,7 +1,15 @@
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { creerPiece, PieceApiError } from './piecesApi';
-import type { CreerPieceRequest, EtatDocumentOption, PieceResponse, TypeDocument } from './types';
+import { uploaderPhoto } from './photosApi';
+import PhotoUpload from './PhotoUpload';
+import type {
+  CreerPieceRequest,
+  EtatDocumentOption,
+  PieceResponse,
+  TypeDocument,
+  TypePhoto,
+} from './types';
 import { ETAT_DOCUMENT_OPTIONS, TYPE_DOCUMENT_LABELS } from './types';
 import { mettreEnFile } from '../../shared/offline/fileSynchronisation';
 import FileAttenteSynchronisation from './FileAttenteSynchronisation';
@@ -54,6 +62,9 @@ function EnregistrementPiecePage() {
   const [enEnvoi, setEnEnvoi] = useState(false);
   const [recu, setRecu] = useState<PieceResponse | null>(null);
   const [roleAgentCourant, setRoleAgentCourant] = useState<string | null>(null);
+  const [photo, setPhoto] = useState<File | null>(null);
+  const [typePhoto, setTypePhoto] = useState<TypePhoto>('RECTO');
+  const [alertePhoto, setAlertePhoto] = useState<string | null>(null);
 
   useEffect(() => {
     recupererAgentCourant()
@@ -65,6 +76,7 @@ function EnregistrementPiecePage() {
     evenement.preventDefault();
     setErreurServeur(null);
     setMessageMiseEnFile(null);
+    setAlertePhoto(null);
     const erreurs = validerFormulaire(formulaire);
     setErreursValidation(erreurs);
     if (Object.keys(erreurs).length > 0) return;
@@ -85,14 +97,30 @@ function EnregistrementPiecePage() {
       setRecu(resultat);
       setFormulaire(FORMULAIRE_INITIAL);
       setErreursValidation({});
+      if (photo) {
+        const photoAEnvoyer = photo;
+        setPhoto(null);
+        try {
+          await uploaderPhoto(resultat.id, typePhoto, photoAEnvoyer);
+        } catch (erreurPhoto) {
+          setAlertePhoto(
+            `${erreurPhoto instanceof Error ? erreurPhoto.message : 'Erreur lors de l’envoi de la photo.'} La fiche est enregistrée : ajoutez la photo depuis la fiche.`,
+          );
+        }
+      }
     } catch (e) {
       const estEchecReseau = !(e instanceof PieceApiError) || !navigator.onLine;
       if (estEchecReseau) {
+        const avaitPhoto = photo !== null;
         await mettreEnFile(payload);
         setFormulaire(FORMULAIRE_INITIAL);
         setErreursValidation({});
+        setPhoto(null);
         setMessageMiseEnFile(
-          'Pas de connexion : la fiche a été enregistrée localement, elle sera synchronisée automatiquement.',
+          'Pas de connexion : la fiche a été enregistrée localement, elle sera synchronisée automatiquement.' +
+            (avaitPhoto
+              ? " La photo n'a pas été conservée : ajoutez-la depuis la fiche une fois synchronisée."
+              : ''),
         );
       } else {
         setErreurServeur(
@@ -115,6 +143,12 @@ function EnregistrementPiecePage() {
       )}
 
       {messageMiseEnFile && <p className="alert-info">{messageMiseEnFile}</p>}
+
+      {alertePhoto && (
+        <p role="alert" className="alert-error">
+          {alertePhoto}
+        </p>
+      )}
 
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
         <form
@@ -253,6 +287,14 @@ function EnregistrementPiecePage() {
             onChange={(e) => setFormulaire({ ...formulaire, remarques: e.target.value })}
           />
         </label>
+
+        <PhotoUpload
+          fichier={photo}
+          type={typePhoto}
+          onChange={setPhoto}
+          onTypeChange={setTypePhoto}
+          disabled={enEnvoi}
+        />
 
         <button type="submit" className="btn-primary self-start" disabled={enEnvoi}>
           Enregistrer la pièce

@@ -99,3 +99,14 @@ export interface SignalerRequest {
 export interface DeblocageRequest {
   motif: string;
 }
+
+export type TypePhoto = 'RECTO' | 'VERSO';
+
+export interface PhotoMeta {
+  id: string;
+  pieceId: string;
+  type: TypePhoto;
+  typeMime: string;
+  tailleOctets: number;
+  creeLe: string;
+}

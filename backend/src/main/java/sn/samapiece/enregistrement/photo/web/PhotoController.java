@@ -1,5 +1,6 @@
 package sn.samapiece.enregistrement.photo.web;
 
+import java.util.List;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -33,6 +34,12 @@ public class PhotoController {
             @RequestParam TypePhoto type,
             @RequestParam MultipartFile fichier) {
         return ResponseEntity.status(HttpStatus.CREATED).body(photoService.uploader(pieceId, type, fichier));
+    }
+
+    @GetMapping
+    @PreAuthorize("hasAnyRole('AGENT','CHEF_POSTE','ADMIN_REGIONAL','ADMIN_NATIONAL')")
+    public ResponseEntity<List<UploadPhotoResponse>> lister(@PathVariable UUID pieceId) {
+        return ResponseEntity.ok(photoService.lister(pieceId));
     }
 
     @GetMapping("/{photoId}")
