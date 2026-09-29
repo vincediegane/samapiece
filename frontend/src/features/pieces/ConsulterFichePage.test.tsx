@@ -98,3 +98,20 @@ describe('ConsulterFichePage', () => {
     expect(screen.queryByText(/PC-ABCDEF01-2026-00001/)).not.toBeInTheDocument();
   });
 });
+
+describe('ConsulterFichePage avec idInitial', () => {
+  it('charge la fiche au montage', async () => {
+    vi.mocked(consulterPiece).mockResolvedValueOnce(PIECE_RESPONSE_MOCK);
+    render(<ConsulterFichePage idInitial={PIECE_RESPONSE_MOCK.id} />);
+
+    expect(await screen.findByText(/PC-ABCDEF01-2026-00001/)).toBeInTheDocument();
+    expect(consulterPiece).toHaveBeenCalledWith(PIECE_RESPONSE_MOCK.id);
+    expect(screen.getByLabelText('Identifiant de la fiche (UUID)')).toHaveValue(PIECE_RESPONSE_MOCK.id);
+  });
+
+  it('n’appelle pas consulterPiece sans idInitial', () => {
+    render(<ConsulterFichePage />);
+
+    expect(consulterPiece).not.toHaveBeenCalled();
+  });
+});

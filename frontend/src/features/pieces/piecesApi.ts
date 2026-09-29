@@ -1,9 +1,12 @@
 import type {
   CreerPieceRequest,
   DeblocageRequest,
+  PageResponse,
+  PieceListeItem,
   PieceResponse,
   RetraitRequest,
   SignalerRequest,
+  StatutPiece,
 } from './types';
 
 const BASE_URL = '/api/v1/pieces';
@@ -52,6 +55,28 @@ export async function consulterPiece(id: string): Promise<PieceResponse> {
     }
     if (reponse.status === 404) {
       throw new PieceApiError('Pièce introuvable.', 404);
+    }
+    throw new PieceApiError(`Erreur ${reponse.status}`, reponse.status);
+  }
+  return reponse.json();
+}
+
+export async function listerPieces(params: {
+  statut?: StatutPiece;
+  page: number;
+  size?: number;
+}): Promise<PageResponse<PieceListeItem>> {
+  const requete = new URLSearchParams({ page: String(params.page), size: String(params.size ?? 20) });
+  if (params.statut) {
+    requete.set('statut', params.statut);
+  }
+  const reponse = await fetch(`${BASE_URL}?${requete.toString()}`, { headers: enTeteAutorisation() });
+  if (!reponse.ok) {
+    if (reponse.status === 401) {
+      throw new PieceApiError('Session expirée, reconnectez-vous.', 401);
+    }
+    if (reponse.status === 403) {
+      throw new PieceApiError('Accès refusé à la liste des pièces.', 403);
     }
     throw new PieceApiError(`Erreur ${reponse.status}`, reponse.status);
   }

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { consulterPiece, PieceApiError } from './piecesApi';
 import type { PieceResponse } from './types';
@@ -7,24 +7,23 @@ import FichePieceCard from './FichePieceCard';
 
 const REGEX_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-function ConsulterFichePage() {
-  const [identifiant, setIdentifiant] = useState('');
+function ConsulterFichePage({ idInitial }: { idInitial?: string }) {
+  const [identifiant, setIdentifiant] = useState(idInitial ?? '');
   const [erreur, setErreur] = useState<string | null>(null);
   const [enChargement, setEnChargement] = useState(false);
   const [piece, setPiece] = useState<PieceResponse | null>(null);
   const [roleAgentCourant, setRoleAgentCourant] = useState<string | null>(null);
 
-  async function ouvrirFiche(evenement: FormEvent) {
-    evenement.preventDefault();
+  async function charger(id: string) {
     setErreur(null);
     setPiece(null);
-    if (!REGEX_UUID.test(identifiant.trim())) {
+    if (!REGEX_UUID.test(id.trim())) {
       setErreur("Format d'identifiant invalide (UUID attendu).");
       return;
     }
     setEnChargement(true);
     try {
-      const resultat = await consulterPiece(identifiant.trim());
+      const resultat = await consulterPiece(id.trim());
       setPiece(resultat);
       try {
         const agent = await recupererAgentCourant();
@@ -42,6 +41,16 @@ function ConsulterFichePage() {
       setEnChargement(false);
     }
   }
+
+  async function ouvrirFiche(evenement: FormEvent) {
+    evenement.preventDefault();
+    await charger(identifiant);
+  }
+
+  useEffect(() => {
+    if (idInitial) void charger(idInitial);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 py-10 sm:px-6">

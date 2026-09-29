@@ -84,6 +84,24 @@ export const STATUT_PIECE_COULEURS: Record<StatutPiece, string> = {
   DETRUITE: 'bg-slate-700',
 };
 
+export interface PieceListeItem {
+  id: string;
+  numeroFiche: string;
+  typeDocument: TypeDocument;
+  statut: StatutPiece;
+  dateDepot: string;
+  ancienneteJours: number;
+  depasseSeuil: boolean;
+}
+
+export interface PageResponse<T> {
+  content: T[];
+  totalElements: number;
+  totalPages: number;
+  number: number;
+  size: number;
+}
+
 export interface RetraitRequest {
   nomReclamant: string;
   pieceJustificativePresentee: string;
