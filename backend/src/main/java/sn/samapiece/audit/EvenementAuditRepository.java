@@ -12,5 +12,11 @@ public interface EvenementAuditRepository extends Repository<EvenementAudit, UUI
 
     Page<EvenementAudit> findAll(Pageable pageable);
 
+    Page<EvenementAudit> findByAction(String action, Pageable pageable);
+
+    Page<EvenementAudit> findByEntiteCible(String entiteCible, Pageable pageable);
+
+    Page<EvenementAudit> findByActionAndEntiteCible(String action, String entiteCible, Pageable pageable);
+
     Optional<EvenementAudit> findById(UUID id);
 }

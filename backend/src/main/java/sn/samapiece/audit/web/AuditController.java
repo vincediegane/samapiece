@@ -7,6 +7,7 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import sn.samapiece.audit.EvenementAuditService;
 
@@ -23,7 +24,9 @@ public class AuditController {
     @GetMapping("/evenements")
     @PreAuthorize("hasAnyRole('AUDITEUR','ADMIN_NATIONAL')")
     public Page<EvenementAuditResponse> lister(
+            @RequestParam(required = false) String action,
+            @RequestParam(required = false) String entiteCible,
             @PageableDefault(size = 20, sort = "horodatage", direction = Sort.Direction.DESC) Pageable pageable) {
-        return evenementAuditService.lister(pageable);
+        return evenementAuditService.lister(action, entiteCible, pageable);
     }
 }
