@@ -10,4 +10,6 @@ public interface PosteRepository extends JpaRepository<Poste, UUID> {
     @Override
     @EntityGraph(attributePaths = "region")
     List<Poste> findAll();
+
+    boolean existsByRegionIdAndNomIgnoreCase(UUID regionId, String nom);
 }
