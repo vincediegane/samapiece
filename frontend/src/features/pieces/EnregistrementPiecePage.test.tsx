@@ -5,6 +5,7 @@ import EnregistrementPiecePage from './EnregistrementPiecePage';
 import type { PieceResponse } from './types';
 import { STATUT_PIECE_LABELS } from './types';
 import { mettreEnFile } from '../../shared/offline/fileSynchronisation';
+import { uploaderPhoto, PhotoApiError } from './photosApi';
 import { recupererAgentCourant } from '../dashboard/dashboardApi';
 import type { AgentCourant } from '../dashboard/types';
 
@@ -15,6 +16,13 @@ vi.mock('../../shared/offline/fileSynchronisation', () => ({
   reessayerTout: vi.fn(),
   demarrerDeclencheurs: vi.fn(() => () => {}),
 }));
+
+vi.mock('./PhotosFiche', () => ({ default: () => null }));
+
+vi.mock('./photosApi', async () => {
+  const actual = await vi.importActual<typeof import('./photosApi')>('./photosApi');
+  return { ...actual, uploaderPhoto: vi.fn() };
+});
 
 vi.mock('../dashboard/dashboardApi', () => ({
   recupererAgentCourant: vi.fn(),
@@ -233,5 +241,125 @@ describe('EnregistrementPiecePage', () => {
     );
     expect(screen.getByLabelText('Nom du titulaire')).toHaveValue('');
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+});
+
+describe('EnregistrementPiecePage — photo optionnelle', () => {
+  const reponseCreationOk = {
+    ok: true,
+    status: 201,
+    json: async () => PIECE_RESPONSE_MOCK,
+  } as Response;
+
+  function photoJpeg(): File {
+    return new File(['x'], 'photo.jpg', { type: 'image/jpeg' });
+  }
+
+  beforeEach(() => {
+    vi.mocked(uploaderPhoto).mockReset();
+    vi.mocked(mettreEnFile).mockClear();
+    URL.createObjectURL = vi.fn().mockReturnValue('blob:apercu');
+    URL.revokeObjectURL = vi.fn();
+  });
+
+  it('affiche un aperçu à la sélection et le révoque au retrait', async () => {
+    render(<EnregistrementPiecePage />);
+    const utilisateur = userEvent.setup();
+
+    await utilisateur.upload(screen.getByLabelText(/Photo du document/), photoJpeg());
+    expect(await screen.findByAltText('Aperçu de la photo sélectionnée')).toBeInTheDocument();
+
+    await utilisateur.click(screen.getByRole('button', { name: 'Retirer la photo' }));
+    expect(screen.queryByAltText('Aperçu de la photo sélectionnée')).not.toBeInTheDocument();
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:apercu');
+  });
+
+  it('rejette un GIF côté client avec un message', async () => {
+    render(<EnregistrementPiecePage />);
+    const utilisateur = userEvent.setup({ applyAccept: false });
+
+    await utilisateur.upload(
+      screen.getByLabelText(/Photo du document/),
+      new File(['x'], 'a.gif', { type: 'image/gif' }),
+    );
+
+    expect(
+      await screen.findByText('Format non accepté : utilisez une image JPEG ou PNG.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByAltText('Aperçu de la photo sélectionnée')).not.toBeInTheDocument();
+  });
+
+  it('rejette un fichier de plus de 10 Mo côté client', async () => {
+    render(<EnregistrementPiecePage />);
+    const utilisateur = userEvent.setup();
+    const gros = photoJpeg();
+    Object.defineProperty(gros, 'size', { value: 10 * 1024 * 1024 + 1 });
+
+    await utilisateur.upload(screen.getByLabelText(/Photo du document/), gros);
+
+    expect(await screen.findByText('La photo dépasse 10 Mo.')).toBeInTheDocument();
+  });
+
+  it('sans photo, n’appelle jamais uploaderPhoto et affiche le reçu', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(reponseCreationOk);
+
+    render(<EnregistrementPiecePage />);
+    const utilisateur = await remplirChampsRequis();
+    await utilisateur.click(screen.getByRole('button', { name: 'Enregistrer la pièce' }));
+
+    expect(await screen.findByText(/PC-ABCDEF01-2026-00001/)).toBeInTheDocument();
+    expect(uploaderPhoto).not.toHaveBeenCalled();
+  });
+
+  it('avec photo, appelle uploaderPhoto après creerPiece', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(reponseCreationOk);
+    vi.mocked(uploaderPhoto).mockResolvedValueOnce({} as never);
+
+    render(<EnregistrementPiecePage />);
+    const utilisateur = await remplirChampsRequis();
+    const fichier = photoJpeg();
+    await utilisateur.upload(screen.getByLabelText(/Photo du document/), fichier);
+    await utilisateur.click(screen.getByRole('button', { name: 'Enregistrer la pièce' }));
+
+    await screen.findByText(/PC-ABCDEF01-2026-00001/);
+    expect(uploaderPhoto).toHaveBeenCalledWith('id-1', 'RECTO', fichier);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('un échec photo (409) laisse le reçu et affiche une alerte sans relancer creerPiece', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(reponseCreationOk);
+    vi.mocked(uploaderPhoto).mockRejectedValueOnce(
+      new PhotoApiError(
+        'Une photo de ce côté existe déjà pour cette fiche.',
+        409,
+        'PHOTO_DEJA_EXISTANTE',
+      ),
+    );
+
+    render(<EnregistrementPiecePage />);
+    const utilisateur = await remplirChampsRequis();
+    await utilisateur.upload(screen.getByLabelText(/Photo du document/), photoJpeg());
+    await utilisateur.click(screen.getByRole('button', { name: 'Enregistrer la pièce' }));
+
+    expect(await screen.findByText(/PC-ABCDEF01-2026-00001/)).toBeInTheDocument();
+    const alerte = await screen.findByRole('alert');
+    expect(alerte).toHaveTextContent('Une photo de ce côté existe déjà pour cette fiche.');
+    expect(alerte).toHaveTextContent('ajoutez la photo depuis la fiche');
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(mettreEnFile).not.toHaveBeenCalled();
+  });
+
+  it('hors connexion, met la fiche en file sans photo et l’indique', async () => {
+    vi.mocked(fetch).mockRejectedValueOnce(new TypeError('Failed to fetch'));
+
+    render(<EnregistrementPiecePage />);
+    const utilisateur = await remplirChampsRequis();
+    await utilisateur.upload(screen.getByLabelText(/Photo du document/), photoJpeg());
+    await utilisateur.click(screen.getByRole('button', { name: 'Enregistrer la pièce' }));
+
+    expect(await screen.findByText(/La photo n'a pas été conservée/)).toBeInTheDocument();
+    expect(mettreEnFile).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(mettreEnFile).mock.calls[0][0]).not.toHaveProperty('photo');
+    expect(uploaderPhoto).not.toHaveBeenCalled();
   });
 });

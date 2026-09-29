@@ -1,14 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import FichePieceCard from './FichePieceCard';
 import { telechargerRecu } from './piecesApi';
+import { listerPhotos, PhotoApiError, telechargerPhoto } from './photosApi';
 import type { PieceResponse, StatutPiece } from './types';
 import { STATUT_PIECE_COULEURS, STATUT_PIECE_LABELS } from './types';
 
 vi.mock('./piecesApi', async () => {
   const actual = await vi.importActual<typeof import('./piecesApi')>('./piecesApi');
   return { ...actual, telechargerRecu: vi.fn() };
+});
+
+vi.mock('./photosApi', async () => {
+  const actual = await vi.importActual<typeof import('./photosApi')>('./photosApi');
+  return { ...actual, listerPhotos: vi.fn(), telechargerPhoto: vi.fn() };
 });
 
 vi.mock('./RetraitForm', () => ({
@@ -62,6 +68,8 @@ function piece(statut: string): PieceResponse {
 
 beforeEach(() => {
   vi.mocked(telechargerRecu).mockReset();
+  vi.mocked(listerPhotos).mockReset().mockResolvedValue([]);
+  vi.mocked(telechargerPhoto).mockReset();
 });
 
 describe('FichePieceCard — badge de statut', () => {
@@ -193,5 +201,81 @@ describe('FichePieceCard — mise à jour après succès formulaire', () => {
       />,
     );
     expect(screen.getByText('Retirée')).toBeInTheDocument();
+  });
+});
+
+describe('FichePieceCard — photos', () => {
+  const META = {
+    id: 'photo-1',
+    pieceId: 'id-1',
+    type: 'RECTO' as const,
+    typeMime: 'image/jpeg',
+    tailleOctets: 10,
+    creeLe: '2026-01-15T10:00:00Z',
+  };
+
+  beforeEach(() => {
+    URL.createObjectURL = vi.fn().mockReturnValue('blob:photo');
+    URL.revokeObjectURL = vi.fn();
+  });
+
+  it('affiche la photo existante', async () => {
+    vi.mocked(listerPhotos).mockResolvedValueOnce([META]);
+    vi.mocked(telechargerPhoto).mockResolvedValueOnce(new Blob(['x']));
+
+    render(
+      <FichePieceCard piece={PIECE_RESPONSE_MOCK} roleAgentCourant="AGENT" onMisAJour={vi.fn()} />,
+    );
+
+    expect(await screen.findByAltText('Photo Recto du document')).toHaveAttribute(
+      'src',
+      'blob:photo',
+    );
+    expect(telechargerPhoto).toHaveBeenCalledWith('id-1', 'photo-1');
+  });
+
+  it('propose l’ajout pour un AGENT quand un côté manque', async () => {
+    render(
+      <FichePieceCard piece={PIECE_RESPONSE_MOCK} roleAgentCourant="AGENT" onMisAJour={vi.fn()} />,
+    );
+
+    expect(await screen.findByRole('button', { name: 'Ajouter la photo' })).toBeDisabled();
+  });
+
+  it('ne propose pas l’ajout pour ADMIN_REGIONAL', async () => {
+    render(
+      <FichePieceCard
+        piece={PIECE_RESPONSE_MOCK}
+        roleAgentCourant="ADMIN_REGIONAL"
+        onMisAJour={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => expect(listerPhotos).toHaveBeenCalled());
+    expect(screen.queryByRole('button', { name: 'Ajouter la photo' })).not.toBeInTheDocument();
+  });
+
+  it('n’affiche rien quand la liste répond 403', async () => {
+    vi.mocked(listerPhotos).mockRejectedValueOnce(new PhotoApiError('périmètre', 403));
+
+    render(
+      <FichePieceCard piece={PIECE_RESPONSE_MOCK} roleAgentCourant="AGENT" onMisAJour={vi.fn()} />,
+    );
+
+    await waitFor(() =>
+      expect(screen.queryByText('Photos du document')).not.toBeInTheDocument(),
+    );
+    expect(screen.queryByRole('button', { name: 'Ajouter la photo' })).not.toBeInTheDocument();
+  });
+
+  it('indique une photo indisponible hors connexion sans bloquer la fiche', async () => {
+    vi.mocked(listerPhotos).mockRejectedValueOnce(new TypeError('Failed to fetch'));
+
+    render(
+      <FichePieceCard piece={PIECE_RESPONSE_MOCK} roleAgentCourant="AGENT" onMisAJour={vi.fn()} />,
+    );
+
+    expect(await screen.findByText('Photo indisponible hors connexion')).toBeInTheDocument();
+    expect(screen.getByText('PC-ABCDEF01-2026-00001')).toBeInTheDocument();
   });
 });
