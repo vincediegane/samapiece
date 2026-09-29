@@ -1,4 +1,4 @@
-import type { AgentCourant, StatistiquesPoste } from './types';
+import type { AgentCourant, StatistiquesConsolidees, StatistiquesPoste } from './types';
 
 function enTeteAutorisation(): HeadersInit {
   const jeton = window.localStorage.getItem('samapiece.accessToken') ?? '';
@@ -15,6 +15,18 @@ export async function getStatistiquesPoste(posteId: string): Promise<Statistique
   const reponse = await fetch(`/api/v1/statistiques/poste/${posteId}`, {
     headers: enTeteAutorisation(),
   });
+  if (!reponse.ok) throw new Error(`Erreur ${reponse.status}`);
+  return reponse.json();
+}
+
+export async function getStatistiquesRegionale(): Promise<StatistiquesConsolidees> {
+  const reponse = await fetch('/api/v1/statistiques/regionale', { headers: enTeteAutorisation() });
+  if (!reponse.ok) throw new Error(`Erreur ${reponse.status}`);
+  return reponse.json();
+}
+
+export async function getStatistiquesNationale(): Promise<StatistiquesConsolidees> {
+  const reponse = await fetch('/api/v1/statistiques/nationale', { headers: enTeteAutorisation() });
   if (!reponse.ok) throw new Error(`Erreur ${reponse.status}`);
   return reponse.json();
 }

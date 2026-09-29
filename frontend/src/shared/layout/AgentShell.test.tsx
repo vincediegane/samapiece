@@ -170,6 +170,65 @@ describe('AgentShell', () => {
     expect(screen.queryByRole('button', { name: 'Référentiel' })).not.toBeInTheDocument();
   });
 
+  it.each(['ADMIN_REGIONAL', 'ADMIN_NATIONAL'])(
+    'affiche l’onglet "Vue multi-poste" pour %s et navigue vers vue-multi-poste',
+    async (role) => {
+      vi.mocked(recupererAgentCourant).mockResolvedValue({ ...AGENT_COURANT_MOCK, role });
+      const onNaviguer = vi.fn();
+      const utilisateur = userEvent.setup();
+      render(
+        <AgentShell
+          actif="pieces"
+          onNaviguer={onNaviguer}
+          onRetourPublic={vi.fn()}
+          onDeconnexion={vi.fn()}
+        >
+          <div>contenu</div>
+        </AgentShell>,
+      );
+
+      await utilisateur.click(await screen.findByRole('button', { name: 'Vue multi-poste' }));
+      expect(onNaviguer).toHaveBeenCalledWith('vue-multi-poste');
+    },
+  );
+
+  it.each(['AGENT', 'CHEF_POSTE', 'AUDITEUR'])(
+    'masque l’onglet "Vue multi-poste" pour %s',
+    async (role) => {
+      vi.mocked(recupererAgentCourant).mockResolvedValue({ ...AGENT_COURANT_MOCK, role });
+      render(
+        <AgentShell
+          actif="pieces"
+          onNaviguer={vi.fn()}
+          onRetourPublic={vi.fn()}
+          onDeconnexion={vi.fn()}
+        >
+          <div>contenu</div>
+        </AgentShell>,
+      );
+
+      await screen.findByText('Commissariat Central Dakar');
+      expect(screen.queryByRole('button', { name: 'Vue multi-poste' })).not.toBeInTheDocument();
+    },
+  );
+
+  it('masque l’onglet "Vue multi-poste" quand le rôle n’est pas chargé', async () => {
+    vi.mocked(recupererAgentCourant).mockRejectedValue(new Error('Erreur 500'));
+    render(
+      <AgentShell
+        actif="pieces"
+        onNaviguer={vi.fn()}
+        onRetourPublic={vi.fn()}
+        onDeconnexion={vi.fn()}
+      >
+        <div>contenu</div>
+      </AgentShell>,
+    );
+
+    await Promise.resolve();
+    expect(screen.queryByRole('button', { name: 'Vue multi-poste' })).not.toBeInTheDocument();
+  });
+
   it('affiche le bouton "Ouvrir une fiche" et appelle onNaviguer(\'fiche\') au clic', async () => {
     const onNaviguer = vi.fn();
     const utilisateur = userEvent.setup();
