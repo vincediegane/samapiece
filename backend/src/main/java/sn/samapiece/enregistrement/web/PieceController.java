@@ -2,6 +2,9 @@ package sn.samapiece.enregistrement.web;
 
 import jakarta.validation.Valid;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -12,10 +15,12 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import sn.samapiece.audit.ActionAuditee;
 import sn.samapiece.enregistrement.PieceService;
 import sn.samapiece.enregistrement.PieceService.RecuPdf;
+import sn.samapiece.enregistrement.StatutPiece;
 
 @RestController
 @RequestMapping("/api/v1/pieces")
@@ -32,6 +37,15 @@ public class PieceController {
     @ActionAuditee(action = "PIECE_CREEE", entiteCible = "PIECE")
     public ResponseEntity<PieceResponse> creer(@Valid @RequestBody CreerPieceRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(pieceService.creer(request));
+    }
+
+    @GetMapping
+    @PreAuthorize("hasAnyRole('AGENT','CHEF_POSTE')")
+    public Page<PieceListeItemResponse> lister(
+            @RequestParam(required = false) UUID posteId,
+            @RequestParam(required = false) StatutPiece statut,
+            @PageableDefault(size = 20) Pageable pageable) {
+        return pieceService.lister(posteId, statut, pageable);
     }
 
     @GetMapping("/{id}")

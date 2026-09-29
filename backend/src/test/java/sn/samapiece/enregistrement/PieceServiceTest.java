@@ -20,6 +20,11 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -29,13 +34,17 @@ import sn.samapiece.enregistrement.web.DeblocageRequest;
 import sn.samapiece.enregistrement.web.RetraitRequest;
 import sn.samapiece.enregistrement.web.SignalerRequest;
 import sn.samapiece.iam.AccesRefuseException;
+import sn.samapiece.enregistrement.web.PieceListeItemResponse;
 import sn.samapiece.iam.Agent;
 import sn.samapiece.iam.AgentRepository;
+import sn.samapiece.iam.PosteIntrouvableException;
 import sn.samapiece.iam.Role;
 import sn.samapiece.recherche.PieceRechercheDocument;
 import sn.samapiece.referentiel.Poste;
+import sn.samapiece.referentiel.PosteRepository;
 import sn.samapiece.referentiel.Region;
 import sn.samapiece.referentiel.TypePoste;
+import sn.samapiece.reporting.StatistiquesProperties;
 
 class PieceServiceTest {
 
@@ -47,9 +56,13 @@ class PieceServiceTest {
     private final ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
     private final PieceRecuPdfGenerator pieceRecuPdfGenerator = mock(PieceRecuPdfGenerator.class);
 
+    private final PosteRepository posteRepository = mock(PosteRepository.class);
+    private final StatistiquesProperties statistiquesProperties = new StatistiquesProperties();
+
     private final PieceService pieceService = new PieceService(
             pieceRepository, agentRepository, retraitRepository, numeroFicheGenerator,
-            numeroDocumentHasher, eventPublisher, pieceRecuPdfGenerator);
+            numeroDocumentHasher, eventPublisher, pieceRecuPdfGenerator,
+            posteRepository, statistiquesProperties);
 
     @AfterEach
     void nettoyerContexteSecurite() {
@@ -450,5 +463,123 @@ class PieceServiceTest {
 
         assertThatThrownBy(() -> pieceService.genererRecu(idInexistant))
                 .isInstanceOf(PieceIntrouvableException.class);
+    }
+
+    @SuppressWarnings("unchecked")
+    private ArgumentCaptor<Collection<StatutPiece>> captorStatuts() {
+        return ArgumentCaptor.forClass(Collection.class);
+    }
+
+    private void stubListe(UUID posteId, Piece... pieces) {
+        when(pieceRepository.findByPosteEtStatuts(eq(posteId), anyCollection(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(pieces)));
+    }
+
+    @Test
+    void lister_sansPosteId_utilisePosteAppelant() {
+        Poste poste = poste();
+        Agent appelant = connecterCommeAppelant(poste);
+        Piece piece = pieceExistante(poste, appelant);
+        stubListe(poste.getId(), piece);
+
+        Page<PieceListeItemResponse> page = pieceService.lister(null, null, PageRequest.of(0, 20));
+
+        assertThat(page.getContent()).hasSize(1);
+        assertThat(page.getContent().get(0).id()).isEqualTo(piece.getId());
+        verify(pieceRepository).findByPosteEtStatuts(eq(poste.getId()), anyCollection(), any(Pageable.class));
+        verify(posteRepository, never()).findById(any());
+    }
+
+    @Test
+    void lister_posteIdHorsPerimetre_throwAccesRefuse() {
+        connecterCommeAppelant(poste());
+        Poste autre = autrePoste();
+        when(posteRepository.findById(autre.getId())).thenReturn(Optional.of(autre));
+
+        assertThatThrownBy(() -> pieceService.lister(autre.getId(), null, PageRequest.of(0, 20)))
+                .isInstanceOf(AccesRefuseException.class);
+        verify(pieceRepository, never()).findByPosteEtStatuts(any(), any(), any());
+    }
+
+    @Test
+    void lister_posteInconnu_throwPosteIntrouvable() {
+        connecterCommeAppelant(poste());
+        UUID inconnu = UUID.randomUUID();
+        when(posteRepository.findById(inconnu)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> pieceService.lister(inconnu, null, PageRequest.of(0, 20)))
+                .isInstanceOf(PosteIntrouvableException.class);
+    }
+
+    @Test
+    void lister_sansStatut_passeDisponibleEtReclamee() {
+        Poste poste = poste();
+        connecterCommeAppelant(poste);
+        stubListe(poste.getId());
+        ArgumentCaptor<Collection<StatutPiece>> statuts = captorStatuts();
+
+        pieceService.lister(null, null, PageRequest.of(0, 20));
+
+        verify(pieceRepository).findByPosteEtStatuts(eq(poste.getId()), statuts.capture(), any(Pageable.class));
+        assertThat(statuts.getValue()).containsExactlyInAnyOrder(StatutPiece.DISPONIBLE, StatutPiece.RECLAMEE);
+    }
+
+    @Test
+    void lister_avecStatut_passeCeStatutSeul() {
+        Poste poste = poste();
+        connecterCommeAppelant(poste);
+        stubListe(poste.getId());
+        ArgumentCaptor<Collection<StatutPiece>> statuts = captorStatuts();
+
+        pieceService.lister(null, StatutPiece.RETIREE, PageRequest.of(0, 20));
+
+        verify(pieceRepository).findByPosteEtStatuts(eq(poste.getId()), statuts.capture(), any(Pageable.class));
+        assertThat(statuts.getValue()).containsExactly(StatutPiece.RETIREE);
+    }
+
+    @Test
+    void lister_sizeSuperieurA100_borneA100() {
+        Poste poste = poste();
+        connecterCommeAppelant(poste);
+        stubListe(poste.getId());
+        ArgumentCaptor<Pageable> pageable = ArgumentCaptor.forClass(Pageable.class);
+
+        pieceService.lister(null, null, PageRequest.of(2, 500));
+
+        verify(pieceRepository).findByPosteEtStatuts(eq(poste.getId()), anyCollection(), pageable.capture());
+        assertThat(pageable.getValue().getPageSize()).isEqualTo(100);
+        assertThat(pageable.getValue().getPageNumber()).isEqualTo(2);
+    }
+
+    @Test
+    void lister_ignoreLeSortDuPageable() {
+        Poste poste = poste();
+        connecterCommeAppelant(poste);
+        stubListe(poste.getId());
+        ArgumentCaptor<Pageable> pageable = ArgumentCaptor.forClass(Pageable.class);
+
+        pieceService.lister(null, null, PageRequest.of(0, 20, Sort.by("numeroFiche").descending()));
+
+        verify(pieceRepository).findByPosteEtStatuts(eq(poste.getId()), anyCollection(), pageable.capture());
+        assertThat(pageable.getValue().getSort().isSorted()).isFalse();
+    }
+
+    @Test
+    void lister_depasseSeuilFalsePourPieceRetiree() {
+        Poste poste = poste();
+        Agent appelant = connecterCommeAppelant(poste);
+        Piece retiree = pieceExistante(poste, appelant);
+        ReflectionTestUtils.setField(retiree, "statut", StatutPiece.RETIREE);
+        ReflectionTestUtils.setField(retiree, "dateDepot", LocalDate.now().minusDays(400));
+        Piece disponible = pieceExistante(poste, appelant, "PC-3F2A9C1B-2026-00002");
+        ReflectionTestUtils.setField(disponible, "dateDepot", LocalDate.now().minusDays(400));
+        stubListe(poste.getId(), retiree, disponible);
+
+        List<PieceListeItemResponse> items =
+                pieceService.lister(null, StatutPiece.RETIREE, PageRequest.of(0, 20)).getContent();
+
+        assertThat(items.get(0).ancienneteJours()).isEqualTo(400);
+        assertThat(items.get(0).depasseSeuil()).isFalse();
+        assertThat(items.get(1).depasseSeuil()).isTrue();
     }
 }

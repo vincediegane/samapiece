@@ -3,6 +3,8 @@ package sn.samapiece.enregistrement;
 import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -15,6 +17,19 @@ public interface PieceRepository extends JpaRepository<Piece, UUID> {
             TypeDocument typeDocument, StatutPiece statut, String nomTitulaire);
 
     List<Piece> findByTypeDocumentAndStatutIn(TypeDocument typeDocument, Collection<StatutPiece> statuts);
+
+    @Query(value = """
+            SELECT p FROM Piece p
+            WHERE p.poste.id = :posteId AND p.statut IN :statuts
+            ORDER BY p.dateDepot ASC, p.numeroFiche ASC
+            """,
+            countQuery = """
+            SELECT COUNT(p) FROM Piece p WHERE p.poste.id = :posteId AND p.statut IN :statuts
+            """)
+    Page<Piece> findByPosteEtStatuts(
+            @Param("posteId") UUID posteId,
+            @Param("statuts") Collection<StatutPiece> statuts,
+            Pageable pageable);
 
     @Query(value = """
             SELECT COUNT(*) AS nombrePieces,

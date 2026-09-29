@@ -1,23 +1,32 @@
 package sn.samapiece.enregistrement;
 
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import sn.samapiece.enregistrement.NumeroDocumentHasher.NumeroDocumentHache;
 import sn.samapiece.enregistrement.web.CreerPieceRequest;
 import sn.samapiece.enregistrement.web.DeblocageRequest;
+import sn.samapiece.enregistrement.web.PieceListeItemResponse;
 import sn.samapiece.enregistrement.web.PieceResponse;
 import sn.samapiece.enregistrement.web.RetraitRequest;
 import sn.samapiece.enregistrement.web.SignalerRequest;
 import sn.samapiece.iam.Agent;
 import sn.samapiece.iam.AgentRepository;
 import sn.samapiece.iam.AccesRefuseException;
+import sn.samapiece.iam.PosteIntrouvableException;
 import sn.samapiece.iam.security.PerimetrePoste;
 import sn.samapiece.recherche.PieceRechercheDocument;
 import sn.samapiece.referentiel.Poste;
+import sn.samapiece.referentiel.PosteRepository;
+import sn.samapiece.reporting.StatistiquesProperties;
 
 @Service
 public class PieceService {
@@ -34,6 +43,8 @@ public class PieceService {
     private final NumeroDocumentHasher numeroDocumentHasher;
     private final ApplicationEventPublisher eventPublisher;
     private final PieceRecuPdfGenerator pieceRecuPdfGenerator;
+    private final PosteRepository posteRepository;
+    private final StatistiquesProperties statistiquesProperties;
 
     public PieceService(
             PieceRepository pieceRepository,
@@ -42,7 +53,9 @@ public class PieceService {
             PieceNumeroFicheGenerator numeroFicheGenerator,
             NumeroDocumentHasher numeroDocumentHasher,
             ApplicationEventPublisher eventPublisher,
-            PieceRecuPdfGenerator pieceRecuPdfGenerator) {
+            PieceRecuPdfGenerator pieceRecuPdfGenerator,
+            PosteRepository posteRepository,
+            StatistiquesProperties statistiquesProperties) {
         this.pieceRepository = pieceRepository;
         this.agentRepository = agentRepository;
         this.retraitRepository = retraitRepository;
@@ -50,6 +63,8 @@ public class PieceService {
         this.numeroDocumentHasher = numeroDocumentHasher;
         this.eventPublisher = eventPublisher;
         this.pieceRecuPdfGenerator = pieceRecuPdfGenerator;
+        this.posteRepository = posteRepository;
+        this.statistiquesProperties = statistiquesProperties;
     }
 
     @Transactional
@@ -129,6 +144,38 @@ public class PieceService {
         }
 
         return PieceResponse.of(piece);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<PieceListeItemResponse> lister(UUID posteId, StatutPiece statut, Pageable pageable) {
+        Agent appelant = appelantCourant();
+
+        UUID posteCibleId;
+        if (posteId == null) {
+            posteCibleId = appelant.getPoste().getId();
+        } else {
+            Poste poste = posteRepository.findById(posteId)
+                    .orElseThrow(() -> new PosteIntrouvableException(posteId));
+            if (!PerimetrePoste.estDansPerimetre(appelant, poste)) {
+                throw new AccesRefuseException("Poste/region hors perimetre pour cette liste.");
+            }
+            posteCibleId = poste.getId();
+        }
+
+        List<StatutPiece> statuts = statut == null
+                ? List.of(StatutPiece.DISPONIBLE, StatutPiece.RECLAMEE)
+                : List.of(statut);
+        Pageable borne = PageRequest.of(pageable.getPageNumber(), Math.min(pageable.getPageSize(), 100));
+
+        LocalDate aujourdHui = LocalDate.now();
+        int seuil = statistiquesProperties.getSeuilAncienneteJours();
+
+        return pieceRepository.findByPosteEtStatuts(posteCibleId, statuts, borne).map(piece -> {
+            long anciennete = ChronoUnit.DAYS.between(piece.getDateDepot(), aujourdHui);
+            boolean enStock = piece.getStatut() == StatutPiece.DISPONIBLE
+                    || piece.getStatut() == StatutPiece.RECLAMEE;
+            return PieceListeItemResponse.of(piece, anciennete, enStock && anciennete > seuil);
+        });
     }
 
     @Transactional
