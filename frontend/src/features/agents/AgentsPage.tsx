@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
-import { creerAgent, desactiverAgent, listerAgents } from './agentsApi';
+import { creerAgent, desactiverAgent, ErreurApiAgents, listerAgents } from './agentsApi';
+import { recupererAgentCourant } from '../dashboard/dashboardApi';
+import { peutGererAgents } from './roles';
 import type { Agent, CreerAgentPayload, Poste, Role } from './types';
 import { IconCopy, IconKey } from '../../shared/icons';
 
@@ -29,7 +31,19 @@ const FORMULAIRE_INITIAL: CreerAgentPayload = {
   role: 'AGENT',
 };
 
+const MESSAGE_DROITS_INSUFFISANTS =
+  'Droits insuffisants : la gestion des comptes agents est réservée aux chefs de poste et aux administrateurs.';
+const MESSAGE_SESSION_INVALIDE = 'Session expirée ou invalide, reconnectez-vous.';
+
+function messagePourErreur(e: unknown, parDefaut: string, utiliserMessage = false): string {
+  if (e instanceof ErreurApiAgents && e.statut === 401) return MESSAGE_SESSION_INVALIDE;
+  if (e instanceof ErreurApiAgents && e.statut === 403) return MESSAGE_DROITS_INSUFFISANTS;
+  if (utiliserMessage && e instanceof Error) return e.message;
+  return parDefaut;
+}
+
 function AgentsPage() {
+  const [acces, setAcces] = useState<'attente' | 'autorise' | 'refuse'>('attente');
   const [agents, setAgents] = useState<Agent[]>([]);
   const [postes, setPostes] = useState<Poste[]>([]);
   const [formulaire, setFormulaire] = useState<CreerAgentPayload>(FORMULAIRE_INITIAL);
@@ -37,9 +51,24 @@ function AgentsPage() {
   const [erreur, setErreur] = useState<string | null>(null);
 
   useEffect(() => {
+    let annule = false;
+    recupererAgentCourant()
+      .then((agent) => {
+        if (!annule) setAcces(peutGererAgents(agent.role) ? 'autorise' : 'refuse');
+      })
+      .catch(() => {
+        if (!annule) setAcces('refuse');
+      });
+    return () => {
+      annule = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (acces !== 'autorise') return;
     listerAgents()
       .then(setAgents)
-      .catch(() => setErreur('Impossible de charger les agents (jeton absent ou expiré).'));
+      .catch((e) => setErreur(messagePourErreur(e, 'Impossible de charger les agents.')));
 
     fetch('/api/v1/postes')
       .then((reponse) => {
@@ -48,7 +77,7 @@ function AgentsPage() {
       })
       .then(setPostes)
       .catch(() => setErreur('Impossible de charger les postes.'));
-  }, []);
+  }, [acces]);
 
   async function soumettreFormulaire(evenement: FormEvent) {
     evenement.preventDefault();
@@ -71,7 +100,7 @@ function AgentsPage() {
       setMotDePasseTemporaire(resultat.motDePasseTemporaire);
       setFormulaire(FORMULAIRE_INITIAL);
     } catch (e) {
-      setErreur(e instanceof Error ? e.message : 'Erreur inconnue lors de la création.');
+      setErreur(messagePourErreur(e, 'Erreur inconnue lors de la création.', true));
     }
   }
 
@@ -83,7 +112,7 @@ function AgentsPage() {
         precedents.map((agent) => (agent.id === id ? { ...agent, actif: false } : agent)),
       );
     } catch (e) {
-      setErreur(e instanceof Error ? e.message : 'Erreur inconnue lors de la désactivation.');
+      setErreur(messagePourErreur(e, 'Erreur inconnue lors de la désactivation.', true));
     }
   }
 
@@ -94,6 +123,20 @@ function AgentsPage() {
     } catch {
       // Copie manuelle si l'API Clipboard est indisponible.
     }
+  }
+
+  if (acces === 'attente') {
+    return <div className="p-8 text-sm text-slate-500">Chargement…</div>;
+  }
+
+  if (acces === 'refuse') {
+    return (
+      <div className="p-8">
+        <div role="alert" className="alert-error">
+          {MESSAGE_DROITS_INSUFFISANTS}
+        </div>
+      </div>
+    );
   }
 
   return (
