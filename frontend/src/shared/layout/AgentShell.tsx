@@ -4,6 +4,7 @@ import { recupererAgentCourant } from '../../features/dashboard/dashboardApi';
 import type { AgentCourant } from '../../features/dashboard/types';
 import { listerFile } from '../offline/fileSynchronisation';
 import { peutConsulterAudit } from '../../features/audit/roles';
+import { peutGererReferentiel } from '../../features/referentiel/roles';
 import { viderSession } from '../../features/auth/session';
 import { useRafraichissementSession } from '../../features/auth/useRafraichissementSession';
 import {
@@ -16,7 +17,7 @@ import {
   IconUsers,
 } from '../icons';
 
-export type OngletAgent = 'pieces' | 'fiche' | 'dashboard' | 'agents' | 'audit';
+export type OngletAgent = 'pieces' | 'fiche' | 'dashboard' | 'agents' | 'audit' | 'referentiel';
 
 interface AgentShellProps {
   actif: OngletAgent;
@@ -137,6 +138,16 @@ function AgentShell({
             >
               <IconShield width={18} height={18} />
               Journal d'audit
+            </button>
+          )}
+          {agent && peutGererReferentiel(agent.role) && (
+            <button
+              type="button"
+              className={actif === 'referentiel' ? 'sidebar-link-active' : 'sidebar-link'}
+              onClick={() => onNaviguer('referentiel')}
+            >
+              <IconChart width={18} height={18} />
+              Référentiel
             </button>
           )}
         </nav>

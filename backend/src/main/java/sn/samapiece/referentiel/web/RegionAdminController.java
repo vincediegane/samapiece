@@ -11,30 +11,28 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import sn.samapiece.audit.ActionAuditee;
-import sn.samapiece.referentiel.PosteRepository;
 import sn.samapiece.referentiel.ReferentielAdminService;
 
 @RestController
-@RequestMapping("/api/v1/postes")
-public class PosteController {
+@RequestMapping("/api/v1/regions")
+public class RegionAdminController {
 
-    private final PosteRepository posteRepository;
     private final ReferentielAdminService referentielAdminService;
 
-    public PosteController(PosteRepository posteRepository, ReferentielAdminService referentielAdminService) {
-        this.posteRepository = posteRepository;
+    public RegionAdminController(ReferentielAdminService referentielAdminService) {
         this.referentielAdminService = referentielAdminService;
-    }
-
-    @GetMapping
-    public List<PosteResponse> lister() {
-        return posteRepository.findAll().stream().map(PosteResponse::from).toList();
     }
 
     @PostMapping
     @PreAuthorize("hasRole('ADMIN_NATIONAL')")
-    @ActionAuditee(action = "POSTE_CREE", entiteCible = "POSTE")
-    public ResponseEntity<PosteResponse> creer(@Valid @RequestBody CreerPosteRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(referentielAdminService.creerPoste(request));
+    @ActionAuditee(action = "REGION_CREEE", entiteCible = "REGION")
+    public ResponseEntity<RegionResponse> creer(@Valid @RequestBody CreerRegionRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(referentielAdminService.creerRegion(request));
+    }
+
+    @GetMapping
+    @PreAuthorize("hasRole('ADMIN_NATIONAL')")
+    public List<RegionResponse> lister() {
+        return referentielAdminService.listerRegions();
     }
 }
