@@ -264,6 +264,96 @@ class PhotoIntegrationTest {
         assertThat(octetsTelecharges).isEqualTo(octetsOriginaux);
     }
 
+    private void uploaderRecto(Piece piece, String token) throws Exception {
+        mockMvc.perform(multipart("/api/v1/pieces/" + piece.getId() + "/photos")
+                        .file(new MockMultipartFile("fichier", "photo.jpg", "image/jpeg", octetsJpegValides()))
+                        .param("type", "RECTO")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
+    void lister_commeAgentMemePoste_shouldRetourner200AvecMetadonnees() throws Exception {
+        Poste poste = creerPoste();
+        Agent agent = creerAgentActif(poste, "PN-2024-00620", Role.AGENT);
+        String token = login("PN-2024-00620", MOT_DE_PASSE_CLAIR);
+        Piece piece = creerPiece(poste, agent);
+        uploaderRecto(piece, token);
+
+        String reponse = mockMvc.perform(get("/api/v1/pieces/" + piece.getId() + "/photos")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString(StandardCharsets.UTF_8);
+
+        var json = OBJECT_MAPPER.readTree(reponse);
+        assertThat(json.size()).isEqualTo(1);
+        assertThat(json.get(0).get("type").asText()).isEqualTo("RECTO");
+        assertThat(json.get(0).get("typeMime").asText()).isEqualTo("image/jpeg");
+        assertThat(json.get(0).get("pieceId").asText()).isEqualTo(piece.getId().toString());
+    }
+
+    @Test
+    void lister_pieceInexistante_shouldRetourner404() throws Exception {
+        Poste poste = creerPoste();
+        String token = creerEtLoginToken("PN-2024-00621", Role.AGENT, poste);
+
+        mockMvc.perform(get("/api/v1/pieces/" + UUID.randomUUID() + "/photos")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void lister_commeAgentAutrePoste_shouldRetourner403() throws Exception {
+        Region region = creerRegion("Dakar");
+        Poste postePiece = creerPoste(region, "Poste Piece");
+        Poste posteAutre = creerPoste(region, "Autre Poste");
+        Agent agentCreateur = creerAgentActif(postePiece, "PN-2024-00622", Role.AGENT);
+        Piece piece = creerPiece(postePiece, agentCreateur);
+        String token = creerEtLoginToken("PN-2024-00623", Role.AGENT, posteAutre);
+
+        mockMvc.perform(get("/api/v1/pieces/" + piece.getId() + "/photos")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void lister_commeAdminRegionalMemeRegion_shouldRetourner200() throws Exception {
+        Region region = creerRegion("Dakar");
+        Poste postePiece = creerPoste(region, "Poste Piece");
+        Poste posteAdmin = creerPoste(region, "Poste Admin");
+        Agent agentCreateur = creerAgentActif(postePiece, "PN-2024-00624", Role.AGENT);
+        Piece piece = creerPiece(postePiece, agentCreateur);
+        String token = creerEtLoginToken("PN-2024-00625", Role.ADMIN_REGIONAL, posteAdmin);
+
+        mockMvc.perform(get("/api/v1/pieces/" + piece.getId() + "/photos")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void lister_commeAuditeur_shouldRetourner403() throws Exception {
+        Poste poste = creerPoste();
+        Agent agent = creerAgentActif(poste, "PN-2024-00626", Role.AGENT);
+        Piece piece = creerPiece(poste, agent);
+        String token = creerEtLoginToken("PN-2024-00627", Role.AUDITEUR, poste);
+
+        mockMvc.perform(get("/api/v1/pieces/" + piece.getId() + "/photos")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void lister_sansToken_shouldRetourner401() throws Exception {
+        Poste poste = creerPoste();
+        Agent agent = creerAgentActif(poste, "PN-2024-00628", Role.AGENT);
+        Piece piece = creerPiece(poste, agent);
+
+        mockMvc.perform(get("/api/v1/pieces/" + piece.getId() + "/photos"))
+                .andExpect(status().isUnauthorized());
+    }
+
     @Test
     void uploader_avecTypeGif_shouldRetourner415() throws Exception {
         Poste poste = creerPoste();

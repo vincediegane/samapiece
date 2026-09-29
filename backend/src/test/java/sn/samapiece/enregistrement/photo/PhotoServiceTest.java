@@ -276,4 +276,46 @@ class PhotoServiceTest {
         assertThat(resultat.octets()).isEqualTo(octetsClair);
         assertThat(resultat.typeMime()).isEqualTo("image/jpeg");
     }
+
+    @Test
+    void lister_avecPieceInexistante_shouldLeverPieceIntrouvableException() {
+        Poste poste = poste();
+        connecterCommeAppelant(agent(poste, Role.AGENT));
+        UUID pieceId = UUID.randomUUID();
+        when(pieceRepository.findById(pieceId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> photoService.lister(pieceId))
+                .isInstanceOf(PieceIntrouvableException.class);
+    }
+
+    @Test
+    void lister_avecPieceHorsPerimetre_shouldLeverAccesRefuseException() {
+        Poste posteAppelant = poste();
+        Poste postePiece = poste();
+        connecterCommeAppelant(agent(posteAppelant, Role.AGENT));
+        UUID pieceId = UUID.randomUUID();
+        when(pieceRepository.findById(pieceId)).thenReturn(Optional.of(piece(postePiece)));
+
+        assertThatThrownBy(() -> photoService.lister(pieceId))
+                .isInstanceOf(AccesRefuseException.class);
+        verify(photoRepository, never()).findByPieceId(any());
+    }
+
+    @Test
+    void lister_avecPhotos_shouldRetournerMetadonnees() {
+        Poste poste = poste();
+        connecterCommeAppelant(agent(poste, Role.AGENT));
+        Piece piece = piece(poste);
+        UUID pieceId = UUID.randomUUID();
+        Photo recto = new Photo(piece, TypePhoto.RECTO, "pieces/x/a.enc", "image/jpeg", 10, "iv1");
+        Photo verso = new Photo(piece, TypePhoto.VERSO, "pieces/x/b.enc", "image/png", 20, "iv2");
+        when(pieceRepository.findById(pieceId)).thenReturn(Optional.of(piece));
+        when(photoRepository.findByPieceId(pieceId)).thenReturn(java.util.List.of(recto, verso));
+
+        java.util.List<UploadPhotoResponse> resultat = photoService.lister(pieceId);
+
+        assertThat(resultat).extracting(UploadPhotoResponse::type).containsExactlyInAnyOrder("RECTO", "VERSO");
+        assertThat(resultat).extracting(UploadPhotoResponse::typeMime)
+                .containsExactlyInAnyOrder("image/jpeg", "image/png");
+    }
 }

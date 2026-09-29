@@ -1,6 +1,8 @@
 package sn.samapiece.enregistrement.photo;
 
 import java.io.IOException;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -122,6 +124,23 @@ public class PhotoService {
         byte[] octetsClair = chiffrementService.dechiffrer(octetsChiffres, photo.getIvChiffrement());
 
         return new PhotoTelechargee(octetsClair, photo.getTypeMime());
+    }
+
+    @Transactional(readOnly = true)
+    public List<UploadPhotoResponse> lister(UUID pieceId) {
+        Agent appelant = appelantCourant();
+
+        Piece piece = pieceRepository.findById(pieceId)
+                .orElseThrow(() -> new PieceIntrouvableException(pieceId));
+
+        if (!PerimetrePoste.estDansPerimetre(appelant, piece.getPoste())) {
+            throw new AccesRefuseException("Poste/region hors perimetre pour cette piece.");
+        }
+
+        return photoRepository.findByPieceId(pieceId).stream()
+                .sorted(Comparator.comparing(Photo::getCreeLe, Comparator.nullsLast(Comparator.naturalOrder())))
+                .map(UploadPhotoResponse::of)
+                .toList();
     }
 
     private Optional<String> detecterTypeMime(byte[] octets) {
