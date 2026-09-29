@@ -55,6 +55,62 @@ describe('AgentShell', () => {
     expect(window.localStorage.getItem('samapiece.accessTokenExpiresAt')).toBeNull();
   });
 
+  it.each(['AUDITEUR', 'ADMIN_NATIONAL'])(
+    'affiche l’entrée "Journal d’audit" pour %s et navigue vers audit',
+    async (role) => {
+      vi.mocked(recupererAgentCourant).mockResolvedValue({ ...AGENT_COURANT_MOCK, role });
+      const onNaviguer = vi.fn();
+      const utilisateur = userEvent.setup();
+      render(
+        <AgentShell
+          actif="pieces"
+          onNaviguer={onNaviguer}
+          onRetourPublic={vi.fn()}
+          onDeconnexion={vi.fn()}
+        >
+          <div>contenu</div>
+        </AgentShell>,
+      );
+
+      await utilisateur.click(await screen.findByRole('button', { name: "Journal d'audit" }));
+      expect(onNaviguer).toHaveBeenCalledWith('audit');
+    },
+  );
+
+  it.each(['AGENT', 'CHEF_POSTE'])('masque l’entrée "Journal d’audit" pour %s', async (role) => {
+    vi.mocked(recupererAgentCourant).mockResolvedValue({ ...AGENT_COURANT_MOCK, role });
+    render(
+      <AgentShell
+        actif="pieces"
+        onNaviguer={vi.fn()}
+        onRetourPublic={vi.fn()}
+        onDeconnexion={vi.fn()}
+      >
+        <div>contenu</div>
+      </AgentShell>,
+    );
+
+    await screen.findByText('Commissariat Central Dakar');
+    expect(screen.queryByRole('button', { name: "Journal d'audit" })).not.toBeInTheDocument();
+  });
+
+  it('masque l’entrée "Journal d’audit" quand le rôle n’est pas chargé', async () => {
+    vi.mocked(recupererAgentCourant).mockRejectedValue(new Error('Erreur 500'));
+    render(
+      <AgentShell
+        actif="pieces"
+        onNaviguer={vi.fn()}
+        onRetourPublic={vi.fn()}
+        onDeconnexion={vi.fn()}
+      >
+        <div>contenu</div>
+      </AgentShell>,
+    );
+
+    await Promise.resolve();
+    expect(screen.queryByRole('button', { name: "Journal d'audit" })).not.toBeInTheDocument();
+  });
+
   it('affiche le bouton "Ouvrir une fiche" et appelle onNaviguer(\'fiche\') au clic', async () => {
     const onNaviguer = vi.fn();
     const utilisateur = userEvent.setup();

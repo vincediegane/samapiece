@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { recupererAgentCourant } from '../../features/dashboard/dashboardApi';
 import type { AgentCourant } from '../../features/dashboard/types';
 import { listerFile } from '../offline/fileSynchronisation';
+import { peutConsulterAudit } from '../../features/audit/roles';
 import { viderSession } from '../../features/auth/session';
 import { useRafraichissementSession } from '../../features/auth/useRafraichissementSession';
 import {
@@ -10,11 +11,12 @@ import {
   IconCloudSync,
   IconDocument,
   IconLogout,
+  IconShield,
   IconSearch,
   IconUsers,
 } from '../icons';
 
-export type OngletAgent = 'pieces' | 'fiche' | 'dashboard' | 'agents';
+export type OngletAgent = 'pieces' | 'fiche' | 'dashboard' | 'agents' | 'audit';
 
 interface AgentShellProps {
   actif: OngletAgent;
@@ -127,6 +129,16 @@ function AgentShell({
             <IconUsers width={18} height={18} />
             Agents
           </button>
+          {agent && peutConsulterAudit(agent.role) && (
+            <button
+              type="button"
+              className={actif === 'audit' ? 'sidebar-link-active' : 'sidebar-link'}
+              onClick={() => onNaviguer('audit')}
+            >
+              <IconShield width={18} height={18} />
+              Journal d'audit
+            </button>
+          )}
         </nav>
 
         <div className="mt-3 flex flex-col gap-3 border-t border-slate-200 pt-4">
