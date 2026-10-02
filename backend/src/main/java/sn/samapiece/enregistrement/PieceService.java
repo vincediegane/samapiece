@@ -23,7 +23,6 @@ import sn.samapiece.iam.AgentRepository;
 import sn.samapiece.iam.AccesRefuseException;
 import sn.samapiece.iam.PosteIntrouvableException;
 import sn.samapiece.iam.security.PerimetrePoste;
-import sn.samapiece.recherche.PieceRechercheDocument;
 import sn.samapiece.referentiel.Poste;
 import sn.samapiece.referentiel.PosteRepository;
 import sn.samapiece.reporting.StatistiquesProperties;
@@ -98,15 +97,6 @@ public class PieceService {
         pieceRepository.saveAndFlush(piece);
 
         LOG.info("Piece creee id={} numeroFiche={}", piece.getId(), piece.getNumeroFiche());
-
-        PieceRechercheDocument document = new PieceRechercheDocument(
-                piece.getId(),
-                piece.getTypeDocument().name(),
-                piece.getNomTitulaire(),
-                piece.getPrenomTitulaire(),
-                piece.getPoste().getNom(),
-                piece.getStatut().name());
-        eventPublisher.publishEvent(new PieceIndexableEvent(document));
 
         eventPublisher.publishEvent(new PieceDisponibleEvent(
                 piece.getId(),
@@ -193,7 +183,6 @@ public class PieceService {
         retraitRepository.saveAndFlush(new Retrait(
                 piece, appelant, request.nomReclamant(), request.pieceJustificativePresentee()));
 
-        republierIndexation(piece);
 
         return PieceResponse.of(piece);
     }
@@ -210,7 +199,6 @@ public class PieceService {
 
         piece.signaler(request.statutCible(), request.motif(), appelant);
 
-        republierIndexation(piece);
 
         return PieceResponse.of(piece);
     }
@@ -244,20 +232,8 @@ public class PieceService {
 
         piece.debloquer(request.motif(), appelant);
 
-        republierIndexation(piece);
 
         return PieceResponse.of(piece);
-    }
-
-    private void republierIndexation(Piece piece) {
-        PieceRechercheDocument document = new PieceRechercheDocument(
-                piece.getId(),
-                piece.getTypeDocument().name(),
-                piece.getNomTitulaire(),
-                piece.getPrenomTitulaire(),
-                piece.getPoste().getNom(),
-                piece.getStatut().name());
-        eventPublisher.publishEvent(new PieceIndexableEvent(document));
     }
 
     private Agent appelantCourant() {

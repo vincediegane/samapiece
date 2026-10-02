@@ -7,7 +7,6 @@ import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -39,7 +38,6 @@ import sn.samapiece.iam.Agent;
 import sn.samapiece.iam.AgentRepository;
 import sn.samapiece.iam.PosteIntrouvableException;
 import sn.samapiece.iam.Role;
-import sn.samapiece.recherche.PieceRechercheDocument;
 import sn.samapiece.referentiel.Poste;
 import sn.samapiece.referentiel.PosteRepository;
 import sn.samapiece.referentiel.Region;
@@ -165,14 +163,13 @@ class PieceServiceTest {
         pieceService.creer(request);
 
         ArgumentCaptor<Object> captor = ArgumentCaptor.forClass(Object.class);
-        verify(eventPublisher, times(2)).publishEvent(captor.capture());
+        verify(eventPublisher).publishEvent(captor.capture());
         List<Object> evenementsPublies = captor.getAllValues();
 
-        assertThat(evenementsPublies).hasSize(2);
-        assertThat(evenementsPublies.get(0)).isInstanceOf(PieceIndexableEvent.class);
-        assertThat(evenementsPublies.get(1)).isInstanceOf(PieceDisponibleEvent.class);
+        assertThat(evenementsPublies).hasSize(1);
+        assertThat(evenementsPublies.get(0)).isInstanceOf(PieceDisponibleEvent.class);
 
-        PieceDisponibleEvent evenement = (PieceDisponibleEvent) evenementsPublies.get(1);
+        PieceDisponibleEvent evenement = (PieceDisponibleEvent) evenementsPublies.get(0);
         assertThat(evenement.numeroDocumentClair()).isEqualTo(request.numeroDocument());
         assertThat(evenement.typeDocument()).isEqualTo(request.typeDocument());
         assertThat(evenement.nomTitulaire()).isEqualTo(request.nomTitulaire());
@@ -334,23 +331,6 @@ class PieceServiceTest {
 
         assertThatThrownBy(() -> pieceService.retirer(piece.getId(), request))
                 .isInstanceOf(AccesRefuseException.class);
-    }
-
-    @Test
-    void retirer_shouldRepublierPieceIndexableEventAvecStatutRetiree() {
-        Poste poste = poste();
-        Agent appelant = connecterCommeAppelant(poste);
-        Piece piece = pieceExistante(poste, appelant);
-        when(pieceRepository.findById(piece.getId())).thenReturn(Optional.of(piece));
-        RetraitRequest request = new RetraitRequest("Ndiaye Fatou", "Carte d'electeur presentee");
-
-        pieceService.retirer(piece.getId(), request);
-
-        ArgumentCaptor<PieceIndexableEvent> captor = ArgumentCaptor.forClass(PieceIndexableEvent.class);
-        verify(eventPublisher).publishEvent(captor.capture());
-        PieceRechercheDocument document = captor.getValue().document();
-        assertThat(document.statut()).isEqualTo(StatutPiece.RETIREE.name());
-        assertThat(document.id()).isEqualTo(piece.getId());
     }
 
     @Test

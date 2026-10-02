@@ -9,7 +9,7 @@ Plateforme numérique de signalement et de récupération des pièces d'identit�
 
 - **Backend** : Java 21, Spring Boot 3 (Spring Web, Spring Security, Spring Data JPA), PostgreSQL, Flyway.
 - **Frontend** : React + Vite, PWA offline-first pour l'application agent.
-- **Infra** : Docker, hébergement souverain visé (ADIE), Meilisearch, Redis, MinIO.
+- **Infra** : Docker, hébergement souverain visé (ADIE), Redis, MinIO.
 
 Détail complet des choix et de leur justification : §11 de `PROJET-SAMAPIECE.md`.
 
@@ -34,7 +34,6 @@ Une fois `docker-compose ps` affiche tous les services en `healthy` (le `fronten
 | Backend (health) | http://localhost:8080/actuator/health |
 | Frontend | http://localhost:8081 |
 | Frontend → API backend | http://localhost:8081/api/v1/... (proxifié vers le backend) |
-| Meilisearch | http://localhost:7700 |
 | MinIO (console) | http://localhost:9001 |
 | RabbitMQ (management) | http://localhost:15672 |
 
@@ -46,9 +45,9 @@ curl -i http://localhost:8081/api/v1/postes
 
 Attendu : `HTTP/1.1 200` et un en-tête `Content-Type: application/json` (pas `text/html`, ce qui indiquerait que la requête est retombée sur `index.html`).
 
-**Important** : `postgres`, `redis`, `meilisearch`, `minio` et `rabbitmq` démarrent avec la stack mais ne sont pas encore réellement utilisés par le backend à ce stade (cf. ticket #1) — leur présence ne garantit pas une intégration fonctionnelle. Le backend expose `/actuator/health` en `UP` sans jamais ouvrir de connexion JDBC vers `postgres`.
+**Important** : `postgres`, `redis`, `minio` et `rabbitmq` démarrent avec la stack mais ne sont pas encore réellement utilisés par le backend à ce stade (cf. ticket #1) — leur présence ne garantit pas une intégration fonctionnelle. Le backend expose `/actuator/health` en `UP` sans jamais ouvrir de connexion JDBC vers `postgres`.
 
-Pour arrêter proprement la stack et supprimer les volumes nommés (`postgres_data`, `minio_data`, `meili_data`) :
+Pour arrêter proprement la stack et supprimer les volumes nommés (`postgres_data`, `minio_data`) :
 
 ```bash
 docker-compose down -v
@@ -75,12 +74,9 @@ décrit un environnement de **démo/suivi client gratuit** (backend, frontend, P
 distinct de la cible d'hébergement souverain visée pour la production (§11 de `PROJET-SAMAPIECE.md`).
 
 **Décision explicite : uniquement des plans gratuits Render, jamais de service payant.** Conséquence :
-Meilisearch, MinIO et RabbitMQ (qui n'ont pas d'équivalent gratuit exploitable sur Render — pas de
+MinIO et RabbitMQ (qui n'ont pas d'équivalent gratuit exploitable sur Render — pas de
 disque persistant sur le plan gratuit, données perdues à chaque veille du service) sont **volontairement
 absents** de cette démo :
-- **Recherche publique** : fonctionne quand même — `RecherchePubliqueService` retombe automatiquement
-  sur une requête PostgreSQL directe dès que Meilisearch est indisponible (repli déjà présent dans le
-  code, pas une dégradation introduite par ce déploiement).
 - **Upload de photo de document** : non fonctionnel sur cette démo (MinIO absent), mais n'est de toute
   façon pas exposé dans l'interface actuelle (ticket #65 non livré) — aucune régression visible.
 - **Notifications SMS asynchrones** : jamais délivrées sur cette démo (RabbitMQ absent). Vérifié
@@ -103,7 +99,7 @@ version "stack complète" précédente (avant cette révision).
    déploie rien tant que les secrets ne sont pas renseignés** : dans l'onglet "Environment" du groupe
    `samapiece-secrets`, saisir manuellement chaque valeur (JWT, clés de chiffrement, clé API SMS,
    informations du premier compte admin). Aucune de ces valeurs n'est ni ne doit être présente dans le
-   fichier versionné. Les variables Meilisearch/MinIO/RabbitMQ sont en revanche déjà écrites en clair
+   fichier versionné. Les variables MinIO/RabbitMQ sont en revanche déjà écrites en clair
    dans `render.yaml` : ce ne sont pas des secrets, seulement des valeurs non vides requises pour
    satisfaire la configuration du backend, ces services n'étant pas déployés.
 4. Avant le tout premier démarrage du service `samapiece-backend` avec `BOOTSTRAP_ADMIN_ENABLED=true` :

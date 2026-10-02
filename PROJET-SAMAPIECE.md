@@ -548,7 +548,7 @@ flowchart TB
 
     subgraph Data["Couche données"]
         DB[(PostgreSQL<br/>données transactionnelles)]
-        SEARCH[(Moteur de recherche<br/>Meilisearch/OpenSearch)]
+        SEARCH[(Recherche<br/>PostgreSQL)]
         CACHE[(Redis<br/>cache & rate limiting)]
         OBJ[(Stockage objet chiffré<br/>photos des documents)]
         QUEUE[[File de messages<br/>notifications & sync]]
@@ -609,7 +609,7 @@ Justification :
 | Backend API | **Java 21 + Spring Boot 3 (Spring Web, Spring Security, Spring Data JPA)** | Écosystème mature et éprouvé pour les systèmes d'information publics/critiques, typage fort, forte communauté d'intégrateurs au Sénégal ; découpage en packages par domaine (`enregistrement`, `recherche`, `notifications`, `retrait_audit`, `iam`, `reporting`) aligné avec l'architecture modulaire de la §11.3 (Spring Modulith en option pour faire respecter les frontières entre modules) |
 | Base de données | **PostgreSQL** | Fiabilité, support JSON natif, extensions géospatiales (PostGIS) pour localiser les postes, forte communauté |
 | Migrations de schéma | **Flyway** (intégré nativement à Spring Boot) | Versionnement des migrations SQL en base, rejouable à chaque environnement |
-| Recherche | **Meilisearch** (léger, auto-hébergeable) ou OpenSearch si besoin plus avancé | Recherche tolérante aux fautes de frappe sur les noms, faible empreinte d'exploitation |
+| Recherche | **PostgreSQL** (requête directe, correspondance exacte nom/prénom) ; moteur dédié (Meilisearch/OpenSearch) à réévaluer seulement si une tolérance aux fautes de frappe devient une exigence | Un moteur dédié n'apportait rien : la vérification finale exige déjà une correspondance exacte |
 | Cache & rate limiting | **Redis** (via Spring Data Redis / Bucket4j pour le rate limiting) | Standard, supporte aussi les files d'attente légères |
 | File de messages | **Spring AMQP + RabbitMQ** (ou file Redis simple en V1 pilote) | RabbitMQ = intégration Spring native, fiable pour les files de notifications, migration possible vers Kafka si le volume l'exige |
 | Stockage objet (photos) | **MinIO** (S3-compatible, auto-hébergeable chez ADIE) ou service cloud souverain équivalent, via le SDK AWS S3 côté Spring Boot | Compatible S3, chiffrement natif, hébergeable localement |

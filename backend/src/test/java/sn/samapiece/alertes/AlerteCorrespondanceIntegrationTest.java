@@ -29,10 +29,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
-import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.containers.RabbitMQContainer;
-import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
@@ -55,15 +53,13 @@ import sn.samapiece.referentiel.TypePoste;
 /**
  * Test d'integration bout-en-bout du pipeline complet #23 : creation d'une Piece DISPONIBLE ->
  * rapprochement en-process (AFTER_COMMIT) -> publication AMQP -> consommation -> envoi SMS, avec
- * un vrai broker RabbitMQ (Testcontainers), une vraie base Postgres, et Meilisearch (pour ne pas
- * desactiver PieceIndexationListener, qui partage la meme transaction de creation).
+ * un vrai broker RabbitMQ (Testcontainers) et une vraie base Postgres.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
 @Testcontainers
 class AlerteCorrespondanceIntegrationTest {
 
-    private static final String MEILI_MASTER_KEY = "test-master-key";
     private static final String HORAIRES = "{\"lundi\":{\"ouvert\":true,\"debut\":\"08:00\",\"fin\":\"18:00\"}}";
     private static final String MOT_DE_PASSE_CLAIR = "MotDePasse123!";
     private static final String CONTACT_CLAIR = "+221771234567";
@@ -79,19 +75,8 @@ class AlerteCorrespondanceIntegrationTest {
     @ServiceConnection
     static RabbitMQContainer rabbitmq = new RabbitMQContainer(DockerImageName.parse("rabbitmq:3-management-alpine"));
 
-    @Container
-    static GenericContainer<?> meilisearch = new GenericContainer<>("getmeili/meilisearch:v1.10")
-            .withExposedPorts(7700)
-            .withEnv("MEILI_MASTER_KEY", MEILI_MASTER_KEY)
-            .withEnv("MEILI_NO_ANALYTICS", "true")
-            .waitingFor(Wait.forHttp("/health"));
-
     @DynamicPropertySource
     static void proprietes(DynamicPropertyRegistry registry) {
-        registry.add("samapiece.meilisearch.host",
-                () -> "http://" + meilisearch.getHost() + ":" + meilisearch.getMappedPort(7700));
-        registry.add("samapiece.meilisearch.api-key", () -> MEILI_MASTER_KEY);
-        registry.add("samapiece.meilisearch.index-pieces", () -> "pieces-test");
         registry.add("samapiece.alerte-correspondance.max-tentatives", () -> "3");
         registry.add("samapiece.alerte-correspondance.retry-ttl-30s-ms", () -> "200");
         registry.add("samapiece.alerte-correspondance.retry-ttl-2m-ms", () -> "200");

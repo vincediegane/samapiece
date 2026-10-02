@@ -6,16 +6,12 @@
 # "Deploy Blueprint" par un humain avant de considerer ce fichier comme valide en pratique.
 #
 # DECISION EXPLICITE (revision post-review, a la demande directe de l'utilisateur) :
-# uniquement des plans gratuits Render. Meilisearch, MinIO et RabbitMQ (Private Services)
+# uniquement des plans gratuits Render. MinIO et RabbitMQ (Private Services)
 # sont VOLONTAIREMENT ABSENTS de ce Blueprint : Render n'offre pas de disque persistant sur
 # le plan gratuit (donnees perdues a chaque veille/redemarrage du service, ~15 min
 # d'inactivite), et le serveur MCP Render connecte a ce compte n'expose meme pas d'outil de
 # creation de Private Service. Consequence fonctionnelle, verifiee dans le code plutot que
 # supposee (voir docs/bolts/77-deploiement-render-stack-complete/) :
-#   - Meilisearch absent : la recherche publique (RecherchePubliqueService) a deja un repli
-#     automatique sur une requete PostgreSQL directe des que Meilisearch leve une exception
-#     (try/catch explicite) ; l'indexation (PieceRechercheIndexService) est deja best-effort
-#     (toute exception est loguee, jamais propagee). Aucun changement de code necessaire.
 #   - MinIO absent : l'upload/telechargement de photo (PhotoStockageService) echouera avec
 #     une erreur applicative propre si jamais invoque, mais aucun ecran frontend ne permet
 #     aujourd'hui de declencher cette action (ticket #65, non livre) — non atteignable en
@@ -27,7 +23,7 @@
 #     demarrage. Consequence : les notifications SMS asynchrones ne sont jamais delivrees sur
 #     cette demo (deja le cas de toute facon, SMS_API_ENDPOINT pointe vers un endpoint
 #     factice ci-dessous, aucune passerelle SMS reelle configuree).
-# Si ces 3 services redeviennent necessaires plus tard (au-dela d'une demo gratuite), un
+# Si ces 2 services redeviennent necessaires plus tard (au-dela d'une demo gratuite), un
 # ticket dedie devra les reintroduire avec un budget explicitement valide (voir l'historique
 # git de ce fichier pour la version "stack complete" precedente).
 #
@@ -37,11 +33,10 @@
 #
 # Aucune valeur de secret n'est ecrite en clair ici : tout champ sensible utilise
 # `sync: false` (saisie manuelle obligatoire dans le dashboard Render au moment du
-# deploiement), dans l'envVarGroup `samapiece-secrets`. Les valeurs de Meilisearch/MinIO/
+# deploiement), dans l'envVarGroup `samapiece-secrets`. Les valeurs de MinIO/
 # RabbitMQ ci-dessous ne sont PAS des secrets (ces services ne sont pas deployes) : ce sont
 # des chaines non vides arbitraires ecrites en clair, uniquement pour satisfaire les
-# contraintes @NotBlank de configuration du backend (MeilisearchProperties,
-# PhotoMinioProperties) qui exigent une valeur presente, jamais une connexion reussie.
+# contraintes @NotBlank de configuration du backend (PhotoMinioProperties) qui exigent une valeur presente, jamais une connexion reussie.
 
 envVarGroups:
   - name: samapiece-secrets
@@ -107,15 +102,6 @@ services:
         fromService: { type: redis, name: samapiece-redis, property: host }
       - key: REDIS_PORT
         fromService: { type: redis, name: samapiece-redis, property: port }
-      # --- Meilisearch : service non deploye (pas d'equivalent gratuit), valeurs
-      # placeholder non sensibles, requises uniquement pour satisfaire @NotBlank. La
-      # recherche publique retombe automatiquement sur PostgreSQL (voir en-tete). ---
-      - key: MEILISEARCH_HOST
-        value: "http://meilisearch-non-deploye.invalid:7700"
-      - key: MEILISEARCH_API_KEY
-        value: "non-utilise"
-      - key: MEILISEARCH_INDEX_PIECES
-        value: pieces
       # --- MinIO : service non deploye (pas d'equivalent gratuit), valeurs placeholder
       # non sensibles. L'upload photo n'est de toute facon pas exploitable depuis l'UI
       # actuelle (ticket #65 non livre) — voir en-tete. ---
