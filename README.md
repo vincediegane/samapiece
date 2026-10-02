@@ -35,7 +35,6 @@ Une fois `docker-compose ps` affiche tous les services en `healthy` (le `fronten
 | Frontend | http://localhost:8081 |
 | Frontend → API backend | http://localhost:8081/api/v1/... (proxifié vers le backend) |
 | MinIO (console) | http://localhost:9001 |
-| RabbitMQ (management) | http://localhost:15672 |
 
 Le conteneur `frontend` (nginx) proxifie tout `/api/*` vers le backend (`location /api/` dans `frontend/nginx.conf.template`, résolue au démarrage via `envsubst` sur `SERVER_PORT`). Pour vérifier que le proxy fonctionne :
 
@@ -45,7 +44,7 @@ curl -i http://localhost:8081/api/v1/postes
 
 Attendu : `HTTP/1.1 200` et un en-tête `Content-Type: application/json` (pas `text/html`, ce qui indiquerait que la requête est retombée sur `index.html`).
 
-**Important** : `postgres`, `minio` et `rabbitmq` démarrent avec la stack mais ne sont pas encore réellement utilisés par le backend à ce stade (cf. ticket #1) — leur présence ne garantit pas une intégration fonctionnelle. Le backend expose `/actuator/health` en `UP` sans jamais ouvrir de connexion JDBC vers `postgres`.
+**Important** : `postgres` et `minio` démarrent avec la stack mais ne sont pas encore réellement utilisés par le backend à ce stade (cf. ticket #1) — leur présence ne garantit pas une intégration fonctionnelle. Le backend expose `/actuator/health` en `UP` sans jamais ouvrir de connexion JDBC vers `postgres`.
 
 Pour arrêter proprement la stack et supprimer les volumes nommés (`postgres_data`, `minio_data`) :
 
@@ -74,17 +73,13 @@ décrit un environnement de **démo/suivi client gratuit** (backend, frontend, P
 distinct de la cible d'hébergement souverain visée pour la production (§11 de `PROJET-SAMAPIECE.md`).
 
 **Décision explicite : uniquement des plans gratuits Render, jamais de service payant.** Conséquence :
-MinIO et RabbitMQ (qui n'ont pas d'équivalent gratuit exploitable sur Render — pas de
-disque persistant sur le plan gratuit, données perdues à chaque veille du service) sont **volontairement
-absents** de cette démo :
+MinIO (qui n'a pas d'équivalent gratuit exploitable sur Render — pas de
+disque persistant sur le plan gratuit, données perdues à chaque veille du service) est **volontairement
+absent** de cette démo :
 - **Upload de photo de document** : non fonctionnel sur cette démo (MinIO absent), mais n'est de toute
   façon pas exposé dans l'interface actuelle (ticket #65 non livré) — aucune régression visible.
-- **Notifications SMS asynchrones** : jamais délivrées sur cette démo (RabbitMQ absent). Vérifié
-  empiriquement que l'absence de RabbitMQ ne bloque pas le démarrage du backend
-  (`management.health.rabbit.enabled=false`, déjà configuré ; les listeners retentent la connexion en
-  arrière-plan sans jamais faire échouer `/actuator/health`).
 
-Si ces 3 services redeviennent nécessaires (au-delà d'une démo gratuite), un ticket dédié devra les
+Si ce service redevient nécessaire (au-delà d'une démo gratuite), un ticket dédié devra les
 réintroduire avec un budget explicitement validé — voir l'historique git de `render.yaml` pour la
 version "stack complète" précédente (avant cette révision).
 
@@ -99,9 +94,9 @@ version "stack complète" précédente (avant cette révision).
    déploie rien tant que les secrets ne sont pas renseignés** : dans l'onglet "Environment" du groupe
    `samapiece-secrets`, saisir manuellement chaque valeur (JWT, clés de chiffrement, clé API SMS,
    informations du premier compte admin). Aucune de ces valeurs n'est ni ne doit être présente dans le
-   fichier versionné. Les variables MinIO/RabbitMQ sont en revanche déjà écrites en clair
+   fichier versionné. Les variables MinIO sont en revanche déjà écrites en clair
    dans `render.yaml` : ce ne sont pas des secrets, seulement des valeurs non vides requises pour
-   satisfaire la configuration du backend, ces services n'étant pas déployés.
+   satisfaire la configuration du backend, ce service n'étant pas déployé.
 4. Avant le tout premier démarrage du service `samapiece-backend` avec `BOOTSTRAP_ADMIN_ENABLED=true` :
    se connecter à `samapiece-db` via le Shell Render (`psql`) et exécuter l'insertion manuelle d'une
    `Region`/un `Poste` de démonstration décrite dans

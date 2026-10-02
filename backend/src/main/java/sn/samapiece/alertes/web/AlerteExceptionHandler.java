@@ -6,6 +6,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import sn.samapiece.alertes.AlerteCriteresInsuffisantsException;
 import sn.samapiece.alertes.AlerteIntrouvableOuExpireeException;
+import sn.samapiece.notifications.EnvoiSmsException;
 
 @RestControllerAdvice
 public class AlerteExceptionHandler {
@@ -29,5 +30,11 @@ public class AlerteExceptionHandler {
     public ResponseEntity<ErreurReponse> gererJetonIntrouvable(AlerteIntrouvableOuExpireeException ex) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ErreurReponse(
                 "JETON_INTROUVABLE", "Ce jeton de désinscription est introuvable, expiré, ou déjà utilisé."));
+    }
+
+    @ExceptionHandler(EnvoiSmsException.class)
+    public ResponseEntity<ErreurReponse> gererEnvoiSmsEnEchec(EnvoiSmsException ex) {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(new ErreurReponse(
+                "SMS_INDISPONIBLE", "L'envoi du SMS a échoué, veuillez réessayer plus tard."));
     }
 }

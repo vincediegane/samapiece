@@ -7,11 +7,6 @@ spring:
     multipart:
       max-file-size: 10MB
       max-request-size: 10MB
-  rabbitmq:
-    host: ${RABBITMQ_HOST}
-    port: ${RABBITMQ_PORT:5672}
-    username: ${RABBITMQ_USER}
-    password: ${RABBITMQ_PASSWORD}
 
 server:
   port: ${SERVER_PORT:8080}
@@ -24,9 +19,6 @@ management:
   endpoint:
     health:
       show-details: never
-  health:
-    rabbit:
-      enabled: false
 
 sentry:
   dsn: ${SENTRY_DSN:}
@@ -51,14 +43,11 @@ samapiece:
     api-key: ${SMS_API_KEY}
     sender-id: ${SMS_SENDER_ID}
     timeout-ms: ${SMS_TIMEOUT_MS:5000}
-    max-tentatives: ${SMS_MAX_TENTATIVES:3}
-    retry-ttl-30s-ms: 30000
-    retry-ttl-2m-ms: 120000
-    retry-ttl-10m-ms: 600000
   alerte-correspondance:
     max-tentatives: ${ALERTE_CORRESPONDANCE_MAX_TENTATIVES:3}
-    retry-ttl-30s-ms: 30000
-    retry-ttl-2m-ms: 120000
-    retry-ttl-10m-ms: 600000
+    intervalle-ms: 10000
+    retry-delai-30s-ms: 30000
+    retry-delai-2m-ms: 120000
+    retry-delai-10m-ms: 600000
   reporting:
     seuil-anciennete-jours: ${SAMAPIECE_SEUIL_ANCIENNETE_JOURS:180}

@@ -15,13 +15,13 @@ public class AlerteCorrespondanceProperties {
     private int maxTentatives;
 
     @Positive
-    private long retryTtl30sMs;
+    private long retryDelai30sMs;
 
     @Positive
-    private long retryTtl2mMs;
+    private long retryDelai2mMs;
 
     @Positive
-    private long retryTtl10mMs;
+    private long retryDelai10mMs;
 
     public int getMaxTentatives() {
         return maxTentatives;
@@ -31,27 +31,27 @@ public class AlerteCorrespondanceProperties {
         this.maxTentatives = maxTentatives;
     }
 
-    public long getRetryTtl30sMs() {
-        return retryTtl30sMs;
+    public long getRetryDelai30sMs() {
+        return retryDelai30sMs;
     }
 
-    public void setRetryTtl30sMs(long retryTtl30sMs) {
-        this.retryTtl30sMs = retryTtl30sMs;
+    public void setRetryDelai30sMs(long retryDelai30sMs) {
+        this.retryDelai30sMs = retryDelai30sMs;
     }
 
-    public long getRetryTtl2mMs() {
-        return retryTtl2mMs;
+    public long getRetryDelai2mMs() {
+        return retryDelai2mMs;
     }
 
-    public void setRetryTtl2mMs(long retryTtl2mMs) {
-        this.retryTtl2mMs = retryTtl2mMs;
+    public void setRetryDelai2mMs(long retryDelai2mMs) {
+        this.retryDelai2mMs = retryDelai2mMs;
     }
 
-    public long getRetryTtl10mMs() {
-        return retryTtl10mMs;
+    public long getRetryDelai10mMs() {
+        return retryDelai10mMs;
     }
 
-    public void setRetryTtl10mMs(long retryTtl10mMs) {
-        this.retryTtl10mMs = retryTtl10mMs;
+    public void setRetryDelai10mMs(long retryDelai10mMs) {
+        this.retryDelai10mMs = retryDelai10mMs;
     }
 }

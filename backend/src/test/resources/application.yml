@@ -3,9 +3,6 @@ management:
     web:
       exposure:
         include: health,info
-  health:
-    rabbit:
-      enabled: false
 
 sentry:
   dsn: ""
@@ -37,12 +34,9 @@ samapiece:
     api-key: test-api-key
     sender-id: SamaPiece
     timeout-ms: 1000
-    max-tentatives: 3
-    retry-ttl-30s-ms: 30000
-    retry-ttl-2m-ms: 120000
-    retry-ttl-10m-ms: 600000
   alerte-correspondance:
     max-tentatives: 3
-    retry-ttl-30s-ms: 30000
-    retry-ttl-2m-ms: 120000
-    retry-ttl-10m-ms: 600000
+    intervalle-ms: 3600000
+    retry-delai-30s-ms: 30000
+    retry-delai-2m-ms: 120000
+    retry-delai-10m-ms: 600000

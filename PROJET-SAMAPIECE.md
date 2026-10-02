@@ -611,7 +611,7 @@ Justification :
 | Migrations de schéma | **Flyway** (intégré nativement à Spring Boot) | Versionnement des migrations SQL en base, rejouable à chaque environnement |
 | Recherche | **PostgreSQL** (requête directe, correspondance exacte nom/prénom) ; moteur dédié (Meilisearch/OpenSearch) à réévaluer seulement si une tolérance aux fautes de frappe devient une exigence | Un moteur dédié n'apportait rien : la vérification finale exige déjà une correspondance exacte |
 | Cache & rate limiting | **Caffeine + Bucket4j en mémoire** (instance unique) ; Redis à réintroduire seulement si le backend passe à plusieurs instances | Aucun service supplémentaire à exploiter pour un pilote mono-instance |
-| File de messages | **Spring AMQP + RabbitMQ** (ou file Redis simple en V1 pilote) | RabbitMQ = intégration Spring native, fiable pour les files de notifications, migration possible vers Kafka si le volume l'exige |
+| File de notifications | **Table PostgreSQL + `@Scheduled`** (outbox avec retry/backoff, instance unique) ; RabbitMQ/Kafka à réévaluer si le volume ou le nombre d'instances l'exige | Aucun broker à exploiter pour un pilote ; la file survit aux redémarrages |
 | Stockage objet (photos) | **MinIO** (S3-compatible, auto-hébergeable chez ADIE) ou service cloud souverain équivalent, via le SDK AWS S3 côté Spring Boot | Compatible S3, chiffrement natif, hébergeable localement |
 | Passerelle SMS | Intégration API **Orange SMS API / Free / Expresso** (à confirmer selon accords) | Couverture maximale des citoyens sénégalais |
 | Authentification | **Spring Security + OAuth2/OIDC (Spring Authorization Server ou Keycloak)** pour les agents, préparation à une fédération avec un futur SSO ADIE | Standard, interopérable, JWT signés pour les échanges API |

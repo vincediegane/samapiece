@@ -14,7 +14,6 @@ import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.test.util.ReflectionTestUtils;
 import sn.samapiece.enregistrement.NumeroDocumentHasher;
 import sn.samapiece.enregistrement.PieceDisponibleEvent;
@@ -24,10 +23,11 @@ class AlerteCorrespondanceServiceTest {
 
     private final AlerteRepository alerteRepository = mock(AlerteRepository.class);
     private final NumeroDocumentHasher numeroDocumentHasher = mock(NumeroDocumentHasher.class);
-    private final RabbitTemplate rabbitTemplate = mock(RabbitTemplate.class);
+    private final NotificationCorrespondanceRepository notificationRepository =
+            mock(NotificationCorrespondanceRepository.class);
 
     private final AlerteCorrespondanceService service =
-            new AlerteCorrespondanceService(alerteRepository, numeroDocumentHasher, rabbitTemplate);
+            new AlerteCorrespondanceService(alerteRepository, numeroDocumentHasher, notificationRepository);
 
     private PieceDisponibleEvent evenement() {
         return new PieceDisponibleEvent(
@@ -50,7 +50,7 @@ class AlerteCorrespondanceServiceTest {
     }
 
     @Test
-    void trouverEtNotifier_avecAlerteCorrespondante_devraitPublierUnMessage() {
+    void trouverEtNotifier_avecAlerteCorrespondante_devraitMettreUneNotificationEnFile() {
         Alerte alerte = alerteAvec("Moussa", null, null, null);
         PieceDisponibleEvent evenement = evenement();
         when(alerteRepository.findByActiveTrueAndTypeDocumentAndNomTitulaireIgnoreCase(
@@ -59,10 +59,11 @@ class AlerteCorrespondanceServiceTest {
 
         service.trouverEtNotifier(evenement);
 
-        verify(rabbitTemplate).convertAndSend(
-                AlerteCorrespondanceRabbitConfig.EXCHANGE,
-                AlerteCorrespondanceRabbitConfig.QUEUE_CONSUME,
-                new AlerteCorrespondanceMessage(alerte.getId(), evenement.pieceId(), 0));
+        ArgumentCaptor<NotificationCorrespondance> captor = ArgumentCaptor.forClass(NotificationCorrespondance.class);
+        verify(notificationRepository).save(captor.capture());
+        assertThat(captor.getValue().getAlerteId()).isEqualTo(alerte.getId());
+        assertThat(captor.getValue().getPieceId()).isEqualTo(evenement.pieceId());
+        assertThat(captor.getValue().getStatut()).isEqualTo(NotificationCorrespondance.Statut.EN_ATTENTE);
     }
 
     @Test
@@ -74,11 +75,11 @@ class AlerteCorrespondanceServiceTest {
 
         service.trouverEtNotifier(evenement);
 
-        verifyNoInteractions(rabbitTemplate);
+        verifyNoInteractions(notificationRepository);
     }
 
     @Test
-    void trouverEtNotifier_avecNumeroDocumentNonCorrespondant_neDevraitPasPublierPourCetteAlerte() {
+    void trouverEtNotifier_avecNumeroDocumentNonCorrespondant_neDevraitRienMettreEnFilePourCetteAlerte() {
         Alerte alerte = alerteAvec("Moussa", null, "hash-different", "sel");
         PieceDisponibleEvent evenement = evenement();
         when(numeroDocumentHasher.verifier(evenement.numeroDocumentClair(), "sel", "hash-different"))
@@ -89,11 +90,11 @@ class AlerteCorrespondanceServiceTest {
 
         service.trouverEtNotifier(evenement);
 
-        verifyNoInteractions(rabbitTemplate);
+        verifyNoInteractions(notificationRepository);
     }
 
     @Test
-    void trouverEtNotifier_sansDiscriminantNumeroDocumentMaisDateNaissanceCorrespondante_devraitPublier() {
+    void trouverEtNotifier_sansDiscriminantNumeroDocumentMaisDateNaissanceCorrespondante_devraitMettreEnFile() {
         Alerte alerte = alerteAvec("Moussa", LocalDate.of(1990, 5, 12), null, null);
         PieceDisponibleEvent evenement = evenement();
         when(alerteRepository.findByActiveTrueAndTypeDocumentAndNomTitulaireIgnoreCase(
@@ -102,14 +103,15 @@ class AlerteCorrespondanceServiceTest {
 
         service.trouverEtNotifier(evenement);
 
-        verify(rabbitTemplate).convertAndSend(
-                eq(AlerteCorrespondanceRabbitConfig.EXCHANGE),
-                eq(AlerteCorrespondanceRabbitConfig.QUEUE_CONSUME),
-                eq(new AlerteCorrespondanceMessage(alerte.getId(), evenement.pieceId(), 0)));
+        ArgumentCaptor<NotificationCorrespondance> captor = ArgumentCaptor.forClass(NotificationCorrespondance.class);
+        verify(notificationRepository).save(captor.capture());
+        assertThat(captor.getValue().getAlerteId()).isEqualTo(alerte.getId());
+        assertThat(captor.getValue().getPieceId()).isEqualTo(evenement.pieceId());
+        assertThat(captor.getValue().getStatut()).isEqualTo(NotificationCorrespondance.Statut.EN_ATTENTE);
     }
 
     @Test
-    void trouverEtNotifier_avecPrenomNonCorrespondant_neDevraitPasPublier() {
+    void trouverEtNotifier_avecPrenomNonCorrespondant_neDevraitRienMettreEnFile() {
         Alerte alerte = alerteAvec("Ibrahima", null, null, null);
         PieceDisponibleEvent evenement = evenement();
         when(alerteRepository.findByActiveTrueAndTypeDocumentAndNomTitulaireIgnoreCase(
@@ -118,11 +120,11 @@ class AlerteCorrespondanceServiceTest {
 
         service.trouverEtNotifier(evenement);
 
-        verifyNoInteractions(rabbitTemplate);
+        verifyNoInteractions(notificationRepository);
     }
 
     @Test
-    void trouverEtNotifier_plusieursAlertesCorrespondantes_devraitPublierUnMessageParAlerte() {
+    void trouverEtNotifier_plusieursAlertesCorrespondantes_devraitMettreUneNotificationEnFileParAlerte() {
         Alerte alerte1 = alerteAvec("Moussa", null, null, null);
         Alerte alerte2 = alerteAvec(null, null, null, null);
         PieceDisponibleEvent evenement = evenement();
@@ -132,18 +134,12 @@ class AlerteCorrespondanceServiceTest {
 
         service.trouverEtNotifier(evenement);
 
-        ArgumentCaptor<AlerteCorrespondanceMessage> captor = ArgumentCaptor.forClass(AlerteCorrespondanceMessage.class);
-        verify(rabbitTemplate, times(2)).convertAndSend(
-                eq(AlerteCorrespondanceRabbitConfig.EXCHANGE),
-                eq(AlerteCorrespondanceRabbitConfig.QUEUE_CONSUME),
-                captor.capture());
+        ArgumentCaptor<NotificationCorrespondance> captor = ArgumentCaptor.forClass(NotificationCorrespondance.class);
+        verify(notificationRepository, times(2)).save(captor.capture());
         assertThat(captor.getAllValues())
-                .extracting(AlerteCorrespondanceMessage::alerteId)
+                .extracting(NotificationCorrespondance::getAlerteId)
                 .containsExactlyInAnyOrder(alerte1.getId(), alerte2.getId());
         assertThat(captor.getAllValues())
-                .allSatisfy(message -> {
-                    assertThat(message.pieceId()).isEqualTo(evenement.pieceId());
-                    assertThat(message.nombreTentatives()).isZero();
-                });
+                .allSatisfy(notification -> assertThat(notification.getPieceId()).isEqualTo(evenement.pieceId()));
     }
 }
