@@ -16,10 +16,6 @@ samapiece:
     access-key: ${MINIO_ACCESS_KEY:samapiece_minio}
     secret-key: ${MINIO_SECRET_KEY:samapiece_minio_password}
     bucket-photos: ${MINIO_BUCKET_PHOTOS:samapiece-photos-dev}
-  meilisearch:
-    host: ${MEILISEARCH_HOST:http://localhost:7700}
-    api-key: ${MEILISEARCH_API_KEY:samapiece_dev_master_key_change_me}
-    index-pieces: ${MEILISEARCH_INDEX_PIECES:pieces}
   rate-limiting:
     recherche-publique:
       capacite: ${RATE_LIMIT_RECHERCHE_CAPACITE:10}

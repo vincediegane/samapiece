@@ -37,7 +37,6 @@ import sn.samapiece.referentiel.RegionRepository;
 @Testcontainers
 class RecherchePubliqueRateLimitingIntegrationTest {
 
-    private static final String MEILI_MASTER_KEY = "test-master-key";
     private static final String IP_SIMULEE = "1.2.3.4";
     private static final long CAPACITE = 3;
 
@@ -46,23 +45,12 @@ class RecherchePubliqueRateLimitingIntegrationTest {
     static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine");
 
     @Container
-    static GenericContainer<?> meilisearch = new GenericContainer<>("getmeili/meilisearch:v1.10")
-            .withExposedPorts(7700)
-            .withEnv("MEILI_MASTER_KEY", MEILI_MASTER_KEY)
-            .withEnv("MEILI_NO_ANALYTICS", "true")
-            .waitingFor(Wait.forHttp("/health"));
-
-    @Container
     static GenericContainer<?> redis = new GenericContainer<>("redis:7-alpine")
             .withExposedPorts(6379)
             .waitingFor(Wait.forListeningPort());
 
     @DynamicPropertySource
     static void proprietes(DynamicPropertyRegistry registry) {
-        registry.add("samapiece.meilisearch.host",
-                () -> "http://" + meilisearch.getHost() + ":" + meilisearch.getMappedPort(7700));
-        registry.add("samapiece.meilisearch.api-key", () -> MEILI_MASTER_KEY);
-        registry.add("samapiece.meilisearch.index-pieces", () -> "pieces-test-rate-limit");
         registry.add("spring.data.redis.host", () -> redis.getHost());
         registry.add("spring.data.redis.port", () -> redis.getMappedPort(6379));
         registry.add("samapiece.rate-limiting.recherche-publique.capacite", () -> CAPACITE);

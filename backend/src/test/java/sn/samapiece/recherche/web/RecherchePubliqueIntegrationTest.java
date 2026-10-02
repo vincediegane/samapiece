@@ -6,11 +6,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.meilisearch.sdk.Client;
-import com.meilisearch.sdk.Config;
-import com.meilisearch.sdk.exceptions.MeilisearchException;
-import com.meilisearch.sdk.model.TasksQuery;
-import com.meilisearch.sdk.model.TasksResults;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.UUID;
@@ -27,12 +22,8 @@ import org.springframework.boot.testcontainers.service.connection.ServiceConnect
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
-import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import sn.samapiece.enregistrement.PieceRepository;
@@ -52,26 +43,9 @@ import sn.samapiece.referentiel.TypePoste;
 @Testcontainers
 class RecherchePubliqueIntegrationTest {
 
-    private static final String MEILI_MASTER_KEY = "test-master-key";
-
     @Container
     @ServiceConnection
     static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine");
-
-    @Container
-    static GenericContainer<?> meilisearch = new GenericContainer<>("getmeili/meilisearch:v1.10")
-            .withExposedPorts(7700)
-            .withEnv("MEILI_MASTER_KEY", MEILI_MASTER_KEY)
-            .withEnv("MEILI_NO_ANALYTICS", "true")
-            .waitingFor(Wait.forHttp("/health"));
-
-    @DynamicPropertySource
-    static void proprietesMeilisearch(DynamicPropertyRegistry registry) {
-        registry.add("samapiece.meilisearch.host",
-                () -> "http://" + meilisearch.getHost() + ":" + meilisearch.getMappedPort(7700));
-        registry.add("samapiece.meilisearch.api-key", () -> MEILI_MASTER_KEY);
-        registry.add("samapiece.meilisearch.index-pieces", () -> "pieces-test");
-    }
 
     private static final String HORAIRES = "{\"lundi\":{\"ouvert\":true,\"debut\":\"08:00\",\"fin\":\"18:00\"}}";
     private static final String MOT_DE_PASSE_CLAIR = "MotDePasse123!";
@@ -100,8 +74,6 @@ class RecherchePubliqueIntegrationTest {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
-    private Client clientMeilisearchDeTest;
-
     @BeforeEach
     void nettoyer() {
         pieceRepository.deleteAll();
@@ -112,8 +84,6 @@ class RecherchePubliqueIntegrationTest {
         agentRepository.deleteAll();
         posteRepository.deleteAll();
         regionRepository.deleteAll();
-        clientMeilisearchDeTest = new Client(new Config(
-                "http://" + meilisearch.getHost() + ":" + meilisearch.getMappedPort(7700), MEILI_MASTER_KEY));
     }
 
     private Region creerRegion(String nom) {
@@ -171,7 +141,7 @@ class RecherchePubliqueIntegrationTest {
                 + "}";
     }
 
-    private JsonNode creerPieceEtAttendreIndexation() throws Exception {
+    private JsonNode creerPiece() throws Exception {
         Poste poste = creerPoste();
         String token = creerEtLoginToken("PN-2024-00800", Role.AGENT, poste);
 
@@ -183,16 +153,7 @@ class RecherchePubliqueIntegrationTest {
                 .andReturn()
                 .getResponse()
                 .getContentAsString(StandardCharsets.UTF_8);
-        attendreLaTacheDIndexationLaPlusRecente();
         return OBJECT_MAPPER.readTree(reponse);
-    }
-
-    private void attendreLaTacheDIndexationLaPlusRecente() throws MeilisearchException {
-        TasksResults taches = clientMeilisearchDeTest.getTasks(
-                new TasksQuery().setIndexUids(new String[] {"pieces-test"}).setLimit(1));
-        if (taches.getResults().length > 0) {
-            clientMeilisearchDeTest.waitForTask(taches.getResults()[0].getUid());
-        }
     }
 
     private String rechercheJson(
@@ -209,7 +170,7 @@ class RecherchePubliqueIntegrationTest {
 
     @Test
     void criteresSuffisantsAvecCorrespondance_devraitRenvoyerTrouveAvecPosteEtReferenceDossier() throws Exception {
-        JsonNode pieceCreee = creerPieceEtAttendreIndexation();
+        JsonNode pieceCreee = creerPiece();
         String numeroFiche = pieceCreee.get("numeroFiche").asText();
 
         String reponse = mockMvc.perform(post("/api/v1/recherche-publique")
@@ -266,7 +227,7 @@ class RecherchePubliqueIntegrationTest {
 
     @Test
     void aucuneCorrespondance_devraitRenvoyerTrouveFalseSansAucuneAutreDonnee() throws Exception {
-        creerPieceEtAttendreIndexation();
+        creerPiece();
 
         String reponse = mockMvc.perform(post("/api/v1/recherche-publique")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -284,8 +245,8 @@ class RecherchePubliqueIntegrationTest {
     }
 
     @Test
-    void statutNonDisponible_devraitRenvoyerTrouveFalseMemeSiIndexeDisponibleDansMeilisearch() throws Exception {
-        JsonNode pieceCreee = creerPieceEtAttendreIndexation();
+    void statutNonDisponible_devraitRenvoyerTrouveFalse() throws Exception {
+        JsonNode pieceCreee = creerPiece();
         UUID pieceId = UUID.fromString(pieceCreee.get("id").asText());
         jdbcTemplate.update("UPDATE piece SET statut = 'retiree' WHERE id = ?", pieceId);
 
@@ -303,7 +264,7 @@ class RecherchePubliqueIntegrationTest {
 
     @Test
     void numeroErrone_devraitRenvoyerTrouveFalse() throws Exception {
-        creerPieceEtAttendreIndexation();
+        creerPiece();
 
         String reponse = mockMvc.perform(post("/api/v1/recherche-publique")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -319,7 +280,7 @@ class RecherchePubliqueIntegrationTest {
 
     @Test
     void plusieursCriteresUnSeulCorrespond_numeroCorrectDateFausse_devraitRenvoyerTrouveFalse() throws Exception {
-        creerPieceEtAttendreIndexation();
+        creerPiece();
 
         String reponse = mockMvc.perform(post("/api/v1/recherche-publique")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -335,7 +296,7 @@ class RecherchePubliqueIntegrationTest {
 
     @Test
     void plusieursCriteresUnSeulCorrespond_numeroFauxDateCorrecte_devraitRenvoyerTrouveFalse() throws Exception {
-        creerPieceEtAttendreIndexation();
+        creerPiece();
 
         String reponse = mockMvc.perform(post("/api/v1/recherche-publique")
                         .contentType(MediaType.APPLICATION_JSON)

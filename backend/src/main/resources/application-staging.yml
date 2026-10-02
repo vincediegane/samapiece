@@ -14,10 +14,6 @@ samapiece:
     access-key: ${MINIO_ACCESS_KEY}
     secret-key: ${MINIO_SECRET_KEY}
     bucket-photos: ${MINIO_BUCKET_PHOTOS}
-  meilisearch:
-    host: ${MEILISEARCH_HOST}
-    api-key: ${MEILISEARCH_API_KEY}
-    index-pieces: ${MEILISEARCH_INDEX_PIECES}
 
 logging:
   level:

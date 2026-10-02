@@ -7,11 +7,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.meilisearch.sdk.Client;
-import com.meilisearch.sdk.Config;
-import com.meilisearch.sdk.exceptions.MeilisearchException;
-import com.meilisearch.sdk.model.TasksQuery;
-import com.meilisearch.sdk.model.TasksResults;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.regex.Matcher;
@@ -58,7 +53,6 @@ import sn.samapiece.referentiel.TypePoste;
 class RecherchePubliqueCaptchaIntegrationTest {
 
     private static final Pattern QUESTION = Pattern.compile("^(\\d+) \\+ (\\d+) = \\?$");
-    private static final String MEILI_MASTER_KEY = "test-master-key";
     private static final String HORAIRES = "{\"lundi\":{\"ouvert\":true,\"debut\":\"08:00\",\"fin\":\"18:00\"}}";
     private static final String MOT_DE_PASSE_CLAIR = "MotDePasse123!";
     private static final String NUMERO_DOCUMENT_REEL = "1234567890123";
@@ -70,23 +64,12 @@ class RecherchePubliqueCaptchaIntegrationTest {
     static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine");
 
     @Container
-    static GenericContainer<?> meilisearch = new GenericContainer<>("getmeili/meilisearch:v1.10")
-            .withExposedPorts(7700)
-            .withEnv("MEILI_MASTER_KEY", MEILI_MASTER_KEY)
-            .withEnv("MEILI_NO_ANALYTICS", "true")
-            .waitingFor(Wait.forHttp("/health"));
-
-    @Container
     static GenericContainer<?> redis = new GenericContainer<>("redis:7-alpine")
             .withExposedPorts(6379)
             .waitingFor(Wait.forListeningPort());
 
     @DynamicPropertySource
     static void proprietes(DynamicPropertyRegistry registry) {
-        registry.add("samapiece.meilisearch.host",
-                () -> "http://" + meilisearch.getHost() + ":" + meilisearch.getMappedPort(7700));
-        registry.add("samapiece.meilisearch.api-key", () -> MEILI_MASTER_KEY);
-        registry.add("samapiece.meilisearch.index-pieces", () -> "pieces-test-captcha");
         registry.add("spring.data.redis.host", () -> redis.getHost());
         registry.add("spring.data.redis.port", () -> redis.getMappedPort(6379));
         registry.add("samapiece.captcha.seuil-echecs-consecutifs", () -> SEUIL_ECHECS);
@@ -122,8 +105,6 @@ class RecherchePubliqueCaptchaIntegrationTest {
     @Autowired
     private StringRedisTemplate redisTemplate;
 
-    private Client clientMeilisearchDeTest;
-
     @BeforeEach
     void nettoyer() {
         pieceRepository.deleteAll();
@@ -136,8 +117,6 @@ class RecherchePubliqueCaptchaIntegrationTest {
         // cette classe partagent le meme conteneur Redis et donc le meme compteur pour la meme IP
         // simulee, faisant echouer les tests selon leur ordre d'execution (deja constate en CI).
         redisTemplate.delete("recherche-publique:echecs:" + IP_SIMULEE);
-        clientMeilisearchDeTest = new Client(new Config(
-                "http://" + meilisearch.getHost() + ":" + meilisearch.getMappedPort(7700), MEILI_MASTER_KEY));
     }
 
     private Region creerRegion(String nom) {
@@ -173,15 +152,7 @@ class RecherchePubliqueCaptchaIntegrationTest {
         return OBJECT_MAPPER.readTree(reponse).get("accessToken").asText();
     }
 
-    private void attendreLaTacheDIndexationLaPlusRecente() throws MeilisearchException {
-        TasksResults taches = clientMeilisearchDeTest.getTasks(
-                new TasksQuery().setIndexUids(new String[] {"pieces-test-captcha"}).setLimit(1));
-        if (taches.getResults().length > 0) {
-            clientMeilisearchDeTest.waitForTask(taches.getResults()[0].getUid());
-        }
-    }
-
-    private JsonNode creerPieceEtAttendreIndexation() throws Exception {
+    private JsonNode creerPiece() throws Exception {
         Poste poste = creerPoste(creerRegion("Dakar"), "Commissariat Central Dakar");
         creerAgentActif(poste, "PN-2024-00950", Role.AGENT);
         String token = login("PN-2024-00950", MOT_DE_PASSE_CLAIR);
@@ -205,7 +176,6 @@ class RecherchePubliqueCaptchaIntegrationTest {
                 .andReturn()
                 .getResponse()
                 .getContentAsString(StandardCharsets.UTF_8);
-        attendreLaTacheDIndexationLaPlusRecente();
         return OBJECT_MAPPER.readTree(reponse);
     }
 
@@ -280,7 +250,7 @@ class RecherchePubliqueCaptchaIntegrationTest {
 
     @Test
     void succesReinitialiseLeCompteur_devraitAutoriserDeNouveauNMoinsUnEchecSansCaptcha() throws Exception {
-        JsonNode pieceCreee = creerPieceEtAttendreIndexation();
+        JsonNode pieceCreee = creerPiece();
         assertThat(pieceCreee).isNotNull();
 
         for (int i = 0; i < SEUIL_ECHECS - 1; i++) {
