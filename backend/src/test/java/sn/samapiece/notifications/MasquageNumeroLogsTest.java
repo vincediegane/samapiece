@@ -1,7 +1,7 @@
 package sn.samapiece.notifications;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
@@ -9,12 +9,10 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
-import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
@@ -26,8 +24,6 @@ class MasquageNumeroLogsTest {
 
     private Logger loggerNotifications;
     private ListAppender<ILoggingEvent> appender;
-    private RabbitTemplate rabbitTemplate;
-    private SmsProperties proprietes;
 
     @BeforeEach
     void initialiser() {
@@ -36,9 +32,6 @@ class MasquageNumeroLogsTest {
         appender.start();
         loggerNotifications.addAppender(appender);
 
-        rabbitTemplate = mock(RabbitTemplate.class);
-        proprietes = new SmsProperties();
-        proprietes.setMaxTentatives(3);
     }
 
     @AfterEach
@@ -49,7 +42,7 @@ class MasquageNumeroLogsTest {
     private PasserelleSmsHttpClient nouveauClientLie(MockRestServiceServer[] serveurSortie) {
         RestClient.Builder builder = RestClient.builder().baseUrl(API_ENDPOINT);
         serveurSortie[0] = MockRestServiceServer.bindTo(builder).build();
-        return new PasserelleSmsHttpClient(builder.build(), rabbitTemplate, "SamaPiece");
+        return new PasserelleSmsHttpClient(builder.build(), "SamaPiece");
     }
 
     private void assertAucunLogNeContientLeNumeroEnClair() {
@@ -70,47 +63,21 @@ class MasquageNumeroLogsTest {
         PasserelleSmsHttpClient client = nouveauClientLie(serveur);
         serveur[0].expect(requestTo(API_ENDPOINT)).andRespond(withServerError());
 
-        client.envoyer(NumeroTelephone.de(NUMERO_CLAIR), "Contenu du message SMS");
+        assertThatThrownBy(() -> client.envoyer(NumeroTelephone.de(NUMERO_CLAIR), "Contenu du message SMS"))
+                .isInstanceOf(EnvoiSmsException.class)
+                .hasMessageNotContaining(SOUS_CHAINE_A_NE_JAMAIS_LOGGUER);
 
         assertAucunLogNeContientLeNumeroEnClair();
     }
 
     @Test
-    void listenerConsommerAvecEchec_neDevraitJamaisLogguerLeNumeroEnClair() {
-        MockRestServiceServer[] serveur = new MockRestServiceServer[1];
-        PasserelleSmsHttpClient client = nouveauClientLie(serveur);
-        serveur[0].expect(requestTo(API_ENDPOINT)).andRespond(withServerError());
-        SmsRetryListener listener = new SmsRetryListener(client, rabbitTemplate, proprietes);
-
-        listener.consommer(new SmsRetryMessage(NUMERO_CLAIR, "Contenu du message SMS", 1));
-
-        assertAucunLogNeContientLeNumeroEnClair();
-    }
-
-    @Test
-    void listenerConsommerAvecSucces_neDevraitJamaisLogguerLeNumeroEnClair() {
+    void envoiReussi_neDevraitJamaisLogguerLeNumeroEnClair() {
         MockRestServiceServer[] serveur = new MockRestServiceServer[1];
         PasserelleSmsHttpClient client = nouveauClientLie(serveur);
         serveur[0].expect(requestTo(API_ENDPOINT)).andRespond(withSuccess());
-        SmsRetryListener listener = new SmsRetryListener(client, rabbitTemplate, proprietes);
 
-        listener.consommer(new SmsRetryMessage(NUMERO_CLAIR, "Contenu du message SMS", 1));
-
-        assertAucunLogNeContientLeNumeroEnClair();
-    }
-
-    @Test
-    void listenerConsommerAuDelaDuMaxTentatives_neDevraitJamaisLogguerLeNumeroEnClair() {
-        MockRestServiceServer[] serveur = new MockRestServiceServer[1];
-        PasserelleSmsHttpClient client = nouveauClientLie(serveur);
-        serveur[0].expect(requestTo(API_ENDPOINT)).andRespond(withServerError());
-        SmsRetryListener listener = new SmsRetryListener(client, rabbitTemplate, proprietes);
-
-        listener.consommer(new SmsRetryMessage(NUMERO_CLAIR, "Contenu du message SMS", 3));
+        client.envoyer(NumeroTelephone.de(NUMERO_CLAIR), "Contenu du message SMS");
 
         assertAucunLogNeContientLeNumeroEnClair();
-        List<ILoggingEvent> evenementsErreur = appender.list;
-        assertThat(evenementsErreur)
-                .anyMatch(evenement -> evenement.getFormattedMessage().contains("dead-letter"));
     }
 }

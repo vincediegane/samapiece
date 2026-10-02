@@ -1,9 +1,9 @@
 package sn.samapiece.alertes;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Service;
 import sn.samapiece.enregistrement.NumeroDocumentHasher;
 import sn.samapiece.enregistrement.PieceDisponibleEvent;
@@ -11,8 +11,8 @@ import sn.samapiece.enregistrement.PieceDisponibleEvent;
 /**
  * Rapprochement en-process (producteur) entre les alertes actives et une {@link PieceDisponibleEvent}
  * fraichement publiee. La verification du numero de document, qui necessite le numero en clair,
- * ne peut se faire qu'ici : voir Decision tranchee 1 de la spec #23 pour la justification du
- * choix de ne pas la deporter dans le consumer AMQP.
+ * ne peut se faire qu'ici : le worker ({@link AlerteCorrespondanceWorker}) ne recoit que des
+ * identifiants. Chaque correspondance est enregistree comme {@link NotificationCorrespondance}.
  */
 @Service
 public class AlerteCorrespondanceService {
@@ -21,15 +21,15 @@ public class AlerteCorrespondanceService {
 
     private final AlerteRepository alerteRepository;
     private final NumeroDocumentHasher numeroDocumentHasher;
-    private final RabbitTemplate rabbitTemplate;
+    private final NotificationCorrespondanceRepository notificationRepository;
 
     public AlerteCorrespondanceService(
             AlerteRepository alerteRepository,
             NumeroDocumentHasher numeroDocumentHasher,
-            RabbitTemplate rabbitTemplate) {
+            NotificationCorrespondanceRepository notificationRepository) {
         this.alerteRepository = alerteRepository;
         this.numeroDocumentHasher = numeroDocumentHasher;
-        this.rabbitTemplate = rabbitTemplate;
+        this.notificationRepository = notificationRepository;
     }
 
     public void trouverEtNotifier(PieceDisponibleEvent evenement) {
@@ -41,13 +41,11 @@ public class AlerteCorrespondanceService {
                 continue;
             }
             LOG.info(
-                    "Correspondance trouvee entre l'alerte {} et la piece {}, publication du message.",
+                    "Correspondance trouvee entre l'alerte {} et la piece {}, notification mise en file.",
                     alerte.getId(),
                     evenement.pieceId());
-            rabbitTemplate.convertAndSend(
-                    AlerteCorrespondanceRabbitConfig.EXCHANGE,
-                    AlerteCorrespondanceRabbitConfig.QUEUE_CONSUME,
-                    new AlerteCorrespondanceMessage(alerte.getId(), evenement.pieceId(), 0));
+            notificationRepository.save(
+                    new NotificationCorrespondance(alerte.getId(), evenement.pieceId(), OffsetDateTime.now()));
         }
     }
 

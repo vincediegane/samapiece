@@ -11,11 +11,10 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.Base64;
+import java.util.Map;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.amqp.core.AmqpAdmin;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -30,10 +29,8 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.containers.RabbitMQContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.utility.DockerImageName;
 import sn.samapiece.alertes.AlerteContactChiffrementService.ContactChiffre;
 import sn.samapiece.enregistrement.NumeroDocumentHasher;
 import sn.samapiece.enregistrement.NumeroDocumentHasher.NumeroDocumentHache;
@@ -52,8 +49,8 @@ import sn.samapiece.referentiel.TypePoste;
 
 /**
  * Test d'integration bout-en-bout du pipeline complet #23 : creation d'une Piece DISPONIBLE ->
- * rapprochement en-process (AFTER_COMMIT) -> publication AMQP -> consommation -> envoi SMS, avec
- * un vrai broker RabbitMQ (Testcontainers) et une vraie base Postgres.
+ * rapprochement en-process (AFTER_COMMIT) -> notification en file (table) -> worker -> envoi SMS,
+ * avec une vraie base Postgres (Testcontainers).
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -71,16 +68,13 @@ class AlerteCorrespondanceIntegrationTest {
     @ServiceConnection
     static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine");
 
-    @Container
-    @ServiceConnection
-    static RabbitMQContainer rabbitmq = new RabbitMQContainer(DockerImageName.parse("rabbitmq:3-management-alpine"));
-
     @DynamicPropertySource
     static void proprietes(DynamicPropertyRegistry registry) {
         registry.add("samapiece.alerte-correspondance.max-tentatives", () -> "3");
-        registry.add("samapiece.alerte-correspondance.retry-ttl-30s-ms", () -> "200");
-        registry.add("samapiece.alerte-correspondance.retry-ttl-2m-ms", () -> "200");
-        registry.add("samapiece.alerte-correspondance.retry-ttl-10m-ms", () -> "200");
+        registry.add("samapiece.alerte-correspondance.intervalle-ms", () -> "200");
+        registry.add("samapiece.alerte-correspondance.retry-delai-30s-ms", () -> "200");
+        registry.add("samapiece.alerte-correspondance.retry-delai-2m-ms", () -> "200");
+        registry.add("samapiece.alerte-correspondance.retry-delai-10m-ms", () -> "200");
     }
 
     @TestConfiguration
@@ -128,14 +122,9 @@ class AlerteCorrespondanceIntegrationTest {
     @Autowired
     private FakePasserelleSms passerelleSms;
 
-    @Autowired
-    private RabbitTemplate rabbitTemplate;
-
-    @Autowired
-    private AmqpAdmin amqpAdmin;
-
     @BeforeEach
     void nettoyer() {
+        jdbcTemplate.update("DELETE FROM notification_correspondance");
         tokenRepository.deleteAll();
         alerteRepository.deleteAll();
         pieceRepository.deleteAll();
@@ -144,11 +133,6 @@ class AlerteCorrespondanceIntegrationTest {
         posteRepository.deleteAll();
         regionRepository.deleteAll();
         passerelleSms.envois.clear();
-        amqpAdmin.purgeQueue(AlerteCorrespondanceRabbitConfig.QUEUE_RETRY_30S, true);
-        amqpAdmin.purgeQueue(AlerteCorrespondanceRabbitConfig.QUEUE_RETRY_2M, true);
-        amqpAdmin.purgeQueue(AlerteCorrespondanceRabbitConfig.QUEUE_RETRY_10M, true);
-        amqpAdmin.purgeQueue(AlerteCorrespondanceRabbitConfig.QUEUE_CONSUME, true);
-        amqpAdmin.purgeQueue(AlerteCorrespondanceRabbitConfig.QUEUE_DEAD_LETTER, true);
     }
 
     private Region creerRegion(String nom) {
@@ -262,7 +246,7 @@ class AlerteCorrespondanceIntegrationTest {
     }
 
     @Test
-    void dechiffrementTouoursEnEchec_devraitFinirEnDeadLetterApresMaxTentatives() throws Exception {
+    void dechiffrementTouoursEnEchec_devraitFinirEnEchecApresMaxTentatives() throws Exception {
         Alerte alerte = creerAlerteActive("Moussa", LocalDate.of(1990, 5, 12), NUMERO_DOCUMENT, CONTACT_CLAIR);
         jdbcTemplate.update(
                 "UPDATE alerte SET contact_iv = ? WHERE id = ?",
@@ -278,11 +262,11 @@ class AlerteCorrespondanceIntegrationTest {
                 .andExpect(status().isCreated());
 
         Awaitility.await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
-            Object messageRecu = rabbitTemplate.receiveAndConvert(AlerteCorrespondanceRabbitConfig.QUEUE_DEAD_LETTER, 500);
-            assertThat(messageRecu).isInstanceOf(AlerteCorrespondanceMessage.class);
-            AlerteCorrespondanceMessage message = (AlerteCorrespondanceMessage) messageRecu;
-            assertThat(message.alerteId()).isEqualTo(alerte.getId());
-            assertThat(message.nombreTentatives()).isEqualTo(4);
+            Map<String, Object> ligne = jdbcTemplate.queryForMap(
+                    "SELECT statut, nombre_tentatives FROM notification_correspondance WHERE alerte_id = ?",
+                    alerte.getId());
+            assertThat(ligne.get("statut")).isEqualTo("ECHEC");
+            assertThat(ligne.get("nombre_tentatives")).isEqualTo(4);
         });
         assertThat(passerelleSms.envois).isEmpty();
     }

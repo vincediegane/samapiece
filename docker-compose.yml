@@ -23,15 +23,10 @@ services:
       MINIO_BUCKET_PHOTOS: ${MINIO_BUCKET_PHOTOS}
       PHOTO_CLE_CHIFFREMENT: ${PHOTO_CLE_CHIFFREMENT}
       ALERTE_CLE_CHIFFREMENT: ${ALERTE_CLE_CHIFFREMENT}
-      RABBITMQ_HOST: rabbitmq
-      RABBITMQ_PORT: 5672
-      RABBITMQ_USER: ${RABBITMQ_DEFAULT_USER}
-      RABBITMQ_PASSWORD: ${RABBITMQ_DEFAULT_PASS}
       SMS_API_ENDPOINT: ${SMS_API_ENDPOINT}
       SMS_API_KEY: ${SMS_API_KEY}
       SMS_SENDER_ID: ${SMS_SENDER_ID}
       SMS_TIMEOUT_MS: ${SMS_TIMEOUT_MS}
-      SMS_MAX_TENTATIVES: ${SMS_MAX_TENTATIVES}
       SENTRY_DSN: ${SENTRY_DSN}
       BOOTSTRAP_ADMIN_ENABLED: ${BOOTSTRAP_ADMIN_ENABLED}
       BOOTSTRAP_ADMIN_MATRICULE: ${BOOTSTRAP_ADMIN_MATRICULE}
@@ -39,8 +34,6 @@ services:
       BOOTSTRAP_ADMIN_POSTE_ID: ${BOOTSTRAP_ADMIN_POSTE_ID}
     depends_on:
       minio:
-        condition: service_healthy
-      rabbitmq:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/actuator/health"]
@@ -99,20 +92,6 @@ services:
       - minio_data:/data
     healthcheck:
       test: ["CMD", "mc", "ready", "local"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  rabbitmq:
-    image: rabbitmq:3-management-alpine
-    environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
-    ports:
-      - "${RABBITMQ_AMQP_HOST_PORT}:5672"
-      - "${RABBITMQ_MANAGEMENT_HOST_PORT}:15672"
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5

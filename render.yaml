@@ -6,7 +6,7 @@
 # "Deploy Blueprint" par un humain avant de considerer ce fichier comme valide en pratique.
 #
 # DECISION EXPLICITE (revision post-review, a la demande directe de l'utilisateur) :
-# uniquement des plans gratuits Render. MinIO et RabbitMQ (Private Services)
+# uniquement des plans gratuits Render. MinIO (Private Service)
 # sont VOLONTAIREMENT ABSENTS de ce Blueprint : Render n'offre pas de disque persistant sur
 # le plan gratuit (donnees perdues a chaque veille/redemarrage du service, ~15 min
 # d'inactivite), et le serveur MCP Render connecte a ce compte n'expose meme pas d'outil de
@@ -16,14 +16,7 @@
 #     une erreur applicative propre si jamais invoque, mais aucun ecran frontend ne permet
 #     aujourd'hui de declencher cette action (ticket #65, non livre) — non atteignable en
 #     pratique sur cette demo.
-#   - RabbitMQ absent : verifie empiriquement (demarrage local avec RABBITMQ_HOST injoignable)
-#     que l'application demarre normalement et que /actuator/health reste "UP"
-#     (management.health.rabbit.enabled=false, deja configure dans application.yml). Les
-#     listeners RabbitMQ retentent la connexion en arriere-plan sans jamais faire echouer le
-#     demarrage. Consequence : les notifications SMS asynchrones ne sont jamais delivrees sur
-#     cette demo (deja le cas de toute facon, SMS_API_ENDPOINT pointe vers un endpoint
-#     factice ci-dessous, aucune passerelle SMS reelle configuree).
-# Si ces 2 services redeviennent necessaires plus tard (au-dela d'une demo gratuite), un
+# Si ce service redevient necessaire plus tard (au-dela d'une demo gratuite), un
 # ticket dedie devra les reintroduire avec un budget explicitement valide (voir l'historique
 # git de ce fichier pour la version "stack complete" precedente).
 #
@@ -33,8 +26,8 @@
 #
 # Aucune valeur de secret n'est ecrite en clair ici : tout champ sensible utilise
 # `sync: false` (saisie manuelle obligatoire dans le dashboard Render au moment du
-# deploiement), dans l'envVarGroup `samapiece-secrets`. Les valeurs de MinIO/
-# RabbitMQ ci-dessous ne sont PAS des secrets (ces services ne sont pas deployes) : ce sont
+# deploiement), dans l'envVarGroup `samapiece-secrets`. Les valeurs de MinIO
+# ci-dessous ne sont PAS des secrets (ce service n'est pas deploye) : ce sont
 # des chaines non vides arbitraires ecrites en clair, uniquement pour satisfaire les
 # contraintes @NotBlank de configuration du backend (PhotoMinioProperties) qui exigent une valeur presente, jamais une connexion reussie.
 
@@ -100,18 +93,6 @@ services:
         value: "non-utilise"
       - key: MINIO_BUCKET_PHOTOS
         value: samapiece-photos-demo
-      # --- RabbitMQ : service non deploye (pas d'equivalent gratuit), valeurs placeholder
-      # non sensibles. Verifie empiriquement que l'absence de RabbitMQ ne bloque pas le
-      # demarrage (voir en-tete) ; les notifications SMS asynchrones sont simplement
-      # non delivrees sur cette demo. ---
-      - key: RABBITMQ_HOST
-        value: "rabbitmq-non-deploye.invalid"
-      - key: RABBITMQ_PORT
-        value: "5672"
-      - key: RABBITMQ_USER
-        value: "non-utilise"
-      - key: RABBITMQ_PASSWORD
-        value: "non-utilise"
       - fromGroup: samapiece-secrets
       - key: SMS_API_ENDPOINT
         value: "http://localhost:1" # pas de passerelle SMS reelle pour la demo, cf. .env.example dev
