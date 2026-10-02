@@ -1,14 +1,12 @@
 package sn.samapiece.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.bucket4j.distributed.proxy.ProxyManager;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.actuate.autoconfigure.security.servlet.EndpointRequest;
 import org.springframework.boot.actuate.health.HealthEndpoint;
 import org.springframework.boot.actuate.info.InfoEndpoint;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -63,7 +61,6 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(
             HttpSecurity http,
             JwtService jwtService,
-            @Lazy ProxyManager<String> bucket4jProxyManager,
             RateLimitingProperties rateLimitingProperties,
             EchecRechercheCounterService echecRechercheCounterService,
             CaptchaVerifier captchaVerifier,
@@ -76,7 +73,7 @@ public class SecurityConfig {
         RecherchePubliqueCaptchaFilter captchaFilter = new RecherchePubliqueCaptchaFilter(
                 echecRechercheCounterService, captchaVerifier, objectMapper, handlerExceptionResolver);
         RecherchePubliqueRateLimitFilter rateLimitFilter = new RecherchePubliqueRateLimitFilter(
-                bucket4jProxyManager, rateLimitingProperties, objectMapper);
+                rateLimitingProperties, objectMapper);
 
         http.csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))

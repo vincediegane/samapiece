@@ -1,38 +1,37 @@
 package sn.samapiece.recherche.securite;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import java.time.Duration;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 /**
- * Ne catch aucune exception Redis : propagée telle quelle à l'appelant (le filtre décide du
- * comportement fail-open, voir {@link RecherchePubliqueCaptchaFilter}).
+ * Compteur d'echecs consecutifs par IP, garde en memoire (instance unique). Le TTL est renouvele
+ * a chaque echec enregistre.
  */
 @Service
 public class EchecRechercheCounterService {
 
-    private static final String PREFIXE_CLE = "recherche-publique:echecs:";
-
-    private final StringRedisTemplate redisTemplate;
+    private final Cache<String, Integer> compteurs;
     private final CaptchaProperties proprietes;
 
-    public EchecRechercheCounterService(StringRedisTemplate redisTemplate, CaptchaProperties proprietes) {
-        this.redisTemplate = redisTemplate;
+    public EchecRechercheCounterService(CaptchaProperties proprietes) {
         this.proprietes = proprietes;
+        this.compteurs = Caffeine.newBuilder()
+                .expireAfterWrite(Duration.ofSeconds(proprietes.getTtlCompteurEchecsSecondes()))
+                .build();
     }
 
     public void enregistrerEchec(String ip) {
-        String cle = PREFIXE_CLE + ip;
-        redisTemplate.opsForValue().increment(cle);
-        redisTemplate.expire(cle, Duration.ofSeconds(proprietes.getTtlCompteurEchecsSecondes()));
+        compteurs.asMap().merge(ip, 1, Integer::sum);
     }
 
     public void enregistrerSucces(String ip) {
-        redisTemplate.delete(PREFIXE_CLE + ip);
+        compteurs.invalidate(ip);
     }
 
     public boolean captchaRequis(String ip) {
-        String valeur = redisTemplate.opsForValue().get(PREFIXE_CLE + ip);
-        return valeur != null && Long.parseLong(valeur) >= proprietes.getSeuilEchecsConsecutifs();
+        Integer valeur = compteurs.getIfPresent(ip);
+        return valeur != null && valeur >= proprietes.getSeuilEchecsConsecutifs();
     }
 }

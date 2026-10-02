@@ -549,7 +549,7 @@ flowchart TB
     subgraph Data["Couche données"]
         DB[(PostgreSQL<br/>données transactionnelles)]
         SEARCH[(Recherche<br/>PostgreSQL)]
-        CACHE[(Redis<br/>cache & rate limiting)]
+        CACHE[(Cache mémoire<br/>rate limiting & CAPTCHA)]
         OBJ[(Stockage objet chiffré<br/>photos des documents)]
         QUEUE[[File de messages<br/>notifications & sync]]
     end
@@ -610,7 +610,7 @@ Justification :
 | Base de données | **PostgreSQL** | Fiabilité, support JSON natif, extensions géospatiales (PostGIS) pour localiser les postes, forte communauté |
 | Migrations de schéma | **Flyway** (intégré nativement à Spring Boot) | Versionnement des migrations SQL en base, rejouable à chaque environnement |
 | Recherche | **PostgreSQL** (requête directe, correspondance exacte nom/prénom) ; moteur dédié (Meilisearch/OpenSearch) à réévaluer seulement si une tolérance aux fautes de frappe devient une exigence | Un moteur dédié n'apportait rien : la vérification finale exige déjà une correspondance exacte |
-| Cache & rate limiting | **Redis** (via Spring Data Redis / Bucket4j pour le rate limiting) | Standard, supporte aussi les files d'attente légères |
+| Cache & rate limiting | **Caffeine + Bucket4j en mémoire** (instance unique) ; Redis à réintroduire seulement si le backend passe à plusieurs instances | Aucun service supplémentaire à exploiter pour un pilote mono-instance |
 | File de messages | **Spring AMQP + RabbitMQ** (ou file Redis simple en V1 pilote) | RabbitMQ = intégration Spring native, fiable pour les files de notifications, migration possible vers Kafka si le volume l'exige |
 | Stockage objet (photos) | **MinIO** (S3-compatible, auto-hébergeable chez ADIE) ou service cloud souverain équivalent, via le SDK AWS S3 côté Spring Boot | Compatible S3, chiffrement natif, hébergeable localement |
 | Passerelle SMS | Intégration API **Orange SMS API / Free / Expresso** (à confirmer selon accords) | Couverture maximale des citoyens sénégalais |

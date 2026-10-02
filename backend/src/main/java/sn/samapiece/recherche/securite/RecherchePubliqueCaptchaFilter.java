@@ -7,8 +7,6 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.web.filter.OncePerRequestFilter;
 import org.springframework.web.servlet.HandlerExceptionResolver;
 import org.springframework.web.util.ContentCachingResponseWrapper;
@@ -19,7 +17,6 @@ public class RecherchePubliqueCaptchaFilter extends OncePerRequestFilter {
     private static final String CHEMIN = "/api/v1/recherche-publique";
     private static final String EN_TETE_TOKEN = "X-Captcha-Token";
     private static final String EN_TETE_REPONSE = "X-Captcha-Reponse";
-    private static final Logger LOG = LoggerFactory.getLogger(RecherchePubliqueCaptchaFilter.class);
 
     private final EchecRechercheCounterService compteurService;
     private final CaptchaVerifier captchaVerifier;
@@ -47,24 +44,10 @@ public class RecherchePubliqueCaptchaFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
         String ip = request.getRemoteAddr();
 
-        boolean captchaRequis;
-        try {
-            captchaRequis = compteurService.captchaRequis(ip);
-        } catch (Exception e) {
-            LOG.warn("Redis indisponible pour le compteur d'échecs, CAPTCHA non exigé (fail-open)", e);
-            captchaRequis = false;
-        }
-
-        if (captchaRequis) {
+        if (compteurService.captchaRequis(ip)) {
             String token = request.getHeader(EN_TETE_TOKEN);
             String reponse = request.getHeader(EN_TETE_REPONSE);
-            boolean valide;
-            try {
-                valide = token != null && reponse != null && captchaVerifier.verifier(token, reponse);
-            } catch (Exception e) {
-                LOG.warn("Redis indisponible pour la vérification du CAPTCHA, requête laissée passer (fail-open)", e);
-                valide = true;
-            }
+            boolean valide = token != null && reponse != null && captchaVerifier.verifier(token, reponse);
             if (!valide) {
                 handlerExceptionResolver.resolveException(request, response, null, new CaptchaRequisException());
                 return;
@@ -74,13 +57,7 @@ public class RecherchePubliqueCaptchaFilter extends OncePerRequestFilter {
         ContentCachingResponseWrapper wrapper = new ContentCachingResponseWrapper(response);
         try {
             chain.doFilter(request, wrapper);
-            try {
-                mettreAJourCompteur(ip, wrapper);
-            } catch (IOException e) {
-                throw e;
-            } catch (Exception e) {
-                LOG.warn("Redis indisponible pour la mise à jour du compteur d'échecs (fail-open)", e);
-            }
+            mettreAJourCompteur(ip, wrapper);
         } finally {
             wrapper.copyBodyToResponse();
         }

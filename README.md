@@ -9,7 +9,7 @@ Plateforme numérique de signalement et de récupération des pièces d'identit�
 
 - **Backend** : Java 21, Spring Boot 3 (Spring Web, Spring Security, Spring Data JPA), PostgreSQL, Flyway.
 - **Frontend** : React + Vite, PWA offline-first pour l'application agent.
-- **Infra** : Docker, hébergement souverain visé (ADIE), Redis, MinIO.
+- **Infra** : Docker, hébergement souverain visé (ADIE), MinIO.
 
 Détail complet des choix et de leur justification : §11 de `PROJET-SAMAPIECE.md`.
 
@@ -45,7 +45,7 @@ curl -i http://localhost:8081/api/v1/postes
 
 Attendu : `HTTP/1.1 200` et un en-tête `Content-Type: application/json` (pas `text/html`, ce qui indiquerait que la requête est retombée sur `index.html`).
 
-**Important** : `postgres`, `redis`, `minio` et `rabbitmq` démarrent avec la stack mais ne sont pas encore réellement utilisés par le backend à ce stade (cf. ticket #1) — leur présence ne garantit pas une intégration fonctionnelle. Le backend expose `/actuator/health` en `UP` sans jamais ouvrir de connexion JDBC vers `postgres`.
+**Important** : `postgres`, `minio` et `rabbitmq` démarrent avec la stack mais ne sont pas encore réellement utilisés par le backend à ce stade (cf. ticket #1) — leur présence ne garantit pas une intégration fonctionnelle. Le backend expose `/actuator/health` en `UP` sans jamais ouvrir de connexion JDBC vers `postgres`.
 
 Pour arrêter proprement la stack et supprimer les volumes nommés (`postgres_data`, `minio_data`) :
 
@@ -70,7 +70,7 @@ voir la section [« Profils disponibles »](./backend/README.md#profils-disponib
 ## Déploiement sur Render (démo)
 
 Un [Blueprint Render](https://render.com/docs/blueprint-spec) versionné, [`render.yaml`](./render.yaml),
-décrit un environnement de **démo/suivi client gratuit** (backend, frontend, PostgreSQL, Redis),
+décrit un environnement de **démo/suivi client gratuit** (backend, frontend, PostgreSQL),
 distinct de la cible d'hébergement souverain visée pour la production (§11 de `PROJET-SAMAPIECE.md`).
 
 **Décision explicite : uniquement des plans gratuits Render, jamais de service payant.** Conséquence :
@@ -126,19 +126,17 @@ dans le dashboard Render.
   et rejouer la procédure de bootstrap admin (§ ci-dessus) périodiquement pour garder la démo utilisable.
 - **Veille des services gratuits après ~15 minutes d'inactivité** : le premier accès après une période
   d'inactivité peut prendre quelques dizaines de secondes le temps que Render redémarre les services
-  `samapiece-backend`/`samapiece-frontend`/`samapiece-redis` — comportement normal du plan gratuit, à
+  `samapiece-backend`/`samapiece-frontend` — comportement normal du plan gratuit, à
   ne pas confondre avec une panne.
-- **TLS/authentification sur le Redis managé Render** : le code actuel ne configure ni mot de passe ni
-  TLS pour Redis, et `management.health.redis.enabled=false` (fail-open déjà acté au ticket #19) masque
-  silencieusement une mauvaise configuration côté `/actuator/health`. Une vérification manuelle du
-  rate-limiting/CAPTCHA de la recherche publique (déclencher plusieurs recherches rapprochées et
-  constater une limitation effective) est nécessaire après déploiement, pas seulement un health check.
+- **Rate limiting / CAPTCHA en mémoire** : les compteurs vivent dans le processus du backend (instance
+  unique) ; ils sont remis à zéro à chaque redémarrage ou réveil du service. Une vérification manuelle
+  du rate-limiting/CAPTCHA de la recherche publique (déclencher plusieurs recherches rapprochées) reste
+  utile après déploiement. Si le backend passe à plusieurs instances, il faudra un stockage partagé.
 - **Port détecté sans variable `PORT`** : l'hypothèse retenue est que Render détecte le port via `EXPOSE`
   dans les Dockerfiles backend/frontend (`runtime: docker`) sans imposer de variable `PORT` — à confirmer
   au premier déploiement.
-- **Schéma exact du Blueprint Render** : le type exact du service Redis managé (`type: redis`) est une
-  hypothèse non certifiée, marquée en commentaire directement dans `render.yaml` — à ajuster au moment
-  du "Deploy Blueprint" sans que cela remette en cause l'architecture des 4 services.
+- **Schéma exact du Blueprint Render** : certains champs du Blueprint restent des hypothèses non certifiées, marquées en commentaire
+  directement dans `render.yaml` — à ajuster au moment du "Deploy Blueprint".
 
 ## Conventions
 
