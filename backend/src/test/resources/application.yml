@@ -6,14 +6,19 @@ management:
   health:
     rabbit:
       enabled: false
-    redis:
-      enabled: false
 
 sentry:
   dsn: ""
   environment: test
 
 samapiece:
+  # Limites larges par defaut : le rate limiting et le CAPTCHA sont desormais en memoire (actifs
+  # dans tous les contextes de test) ; les tests dedies les resserrent via @DynamicPropertySource.
+  rate-limiting:
+    recherche-publique:
+      capacite: 100000
+  captcha:
+    seuil-echecs-consecutifs: 100000
   jwt:
     secret: test-secret-uniquement-pour-les-tests-automatises-ne-jamais-reutiliser
   minio:

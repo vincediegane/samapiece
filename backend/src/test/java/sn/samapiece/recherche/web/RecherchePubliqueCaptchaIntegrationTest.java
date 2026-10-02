@@ -18,16 +18,14 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.http.MediaType;
-import org.springframework.data.redis.core.StringRedisTemplate;
+import sn.samapiece.recherche.securite.EchecRechercheCounterService;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
-import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import sn.samapiece.enregistrement.PieceRepository;
@@ -63,15 +61,8 @@ class RecherchePubliqueCaptchaIntegrationTest {
     @ServiceConnection
     static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine");
 
-    @Container
-    static GenericContainer<?> redis = new GenericContainer<>("redis:7-alpine")
-            .withExposedPorts(6379)
-            .waitingFor(Wait.forListeningPort());
-
     @DynamicPropertySource
     static void proprietes(DynamicPropertyRegistry registry) {
-        registry.add("spring.data.redis.host", () -> redis.getHost());
-        registry.add("spring.data.redis.port", () -> redis.getMappedPort(6379));
         registry.add("samapiece.captcha.seuil-echecs-consecutifs", () -> SEUIL_ECHECS);
         registry.add("samapiece.captcha.ttl-compteur-echecs-secondes", () -> 600);
         registry.add("samapiece.captcha.ttl-defi-secondes", () -> 120);
@@ -103,7 +94,7 @@ class RecherchePubliqueCaptchaIntegrationTest {
     private JdbcTemplate jdbcTemplate;
 
     @Autowired
-    private StringRedisTemplate redisTemplate;
+    private EchecRechercheCounterService compteurEchecs;
 
     @BeforeEach
     void nettoyer() {
@@ -112,11 +103,11 @@ class RecherchePubliqueCaptchaIntegrationTest {
         agentRepository.deleteAll();
         posteRepository.deleteAll();
         regionRepository.deleteAll();
-        // Le compteur d'echecs Redis pour IP_SIMULEE n'est jamais nettoye par le code de production
+        // Le compteur d'echecs en memoire pour IP_SIMULEE n'est jamais nettoye par le code de production
         // (il expire seulement via son TTL glissant) : sans ce reset explicite, les methodes @Test de
-        // cette classe partagent le meme conteneur Redis et donc le meme compteur pour la meme IP
+        // cette classe partagent le meme contexte Spring et donc le meme compteur pour la meme IP
         // simulee, faisant echouer les tests selon leur ordre d'execution (deja constate en CI).
-        redisTemplate.delete("recherche-publique:echecs:" + IP_SIMULEE);
+        compteurEchecs.enregistrerSucces(IP_SIMULEE);
     }
 
     private Region creerRegion(String nom) {

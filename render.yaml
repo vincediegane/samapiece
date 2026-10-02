@@ -63,15 +63,6 @@ databases:
     user: samapiece
 
 services:
-  # --- Redis managé (Render "Key Value"), plan gratuit ---
-  - type: redis
-    # (hypothese a confirmer au deploiement manuel) : la cle Blueprint exacte du service
-    # managé Redis/Key Value pourrait differer de `type: redis` selon la version du schema
-    # Render au moment du deploiement reel.
-    name: samapiece-redis
-    plan: free
-    ipAllowList: [] # pas d'acces externe, uniquement inter-services internes
-
   # --- Backend, plan gratuit ---
   - type: web
     name: samapiece-backend
@@ -98,10 +89,6 @@ services:
         fromDatabase: { name: samapiece-db, property: user }
       - key: DB_PASSWORD
         fromDatabase: { name: samapiece-db, property: password }
-      - key: REDIS_HOST
-        fromService: { type: redis, name: samapiece-redis, property: host }
-      - key: REDIS_PORT
-        fromService: { type: redis, name: samapiece-redis, property: port }
       # --- MinIO : service non deploye (pas d'equivalent gratuit), valeurs placeholder
       # non sensibles. L'upload photo n'est de toute facon pas exploitable depuis l'UI
       # actuelle (ticket #65 non livre) — voir en-tete. ---

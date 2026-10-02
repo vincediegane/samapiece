@@ -5,10 +5,6 @@ spring:
     password: ${DB_PASSWORD}
   rabbitmq:
     host: ${RABBITMQ_HOST:localhost}
-  data:
-    redis:
-      host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6379}
 
 samapiece:
   minio:

@@ -32,8 +32,6 @@ services:
       SMS_SENDER_ID: ${SMS_SENDER_ID}
       SMS_TIMEOUT_MS: ${SMS_TIMEOUT_MS}
       SMS_MAX_TENTATIVES: ${SMS_MAX_TENTATIVES}
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
       SENTRY_DSN: ${SENTRY_DSN}
       BOOTSTRAP_ADMIN_ENABLED: ${BOOTSTRAP_ADMIN_ENABLED}
       BOOTSTRAP_ADMIN_MATRICULE: ${BOOTSTRAP_ADMIN_MATRICULE}
@@ -77,16 +75,6 @@ services:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "${REDIS_HOST_PORT}:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
